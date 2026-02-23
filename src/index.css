@@ -1,0 +1,448 @@
+/* RESET BÁSICO */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+.container-principal {
+  min-height: 100vh;
+  background-color: #f4f7f6;
+  position: relative;
+}
+
+/* BARRA DE NAVEGAÇÃO */
+.barra-navegacao {
+  background-color: #ffffff;
+  height: 70px;
+  display: flex;
+  align-items: center;
+  padding: 0 30px;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+  position: relative;
+  z-index: 1000;
+}
+
+.imagem-logo-nav {
+  height: 50px;
+  width: auto;
+  margin-right: 15px;
+}
+
+.logo-area {
+  display: flex;
+  align-items: center;
+  margin-right: 40px;
+}
+
+.texto-logo {
+  font-size: 22px;
+  color: #1a202c;
+  letter-spacing: 1px;
+}
+
+.texto-logo span {
+  color: #9da4b0;
+}
+
+/* NAVEGAÇÃO PRINCIPAL */
+.lista-links {
+  display: flex;
+  list-style: none;
+  gap: 10px;
+  /* MUDANÇA AQUI: Centralizando o menu perfeitamente na página */
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.item-menu {
+  position: relative;
+}
+
+.botao-link {
+  background: transparent;
+  border: none;
+  color: #2d3748;
+  font-size: 15px;
+  font-weight: 500;
+  cursor: pointer;
+  padding: 10px 15px;
+  transition: 0.2s;
+}
+
+.botao-link:hover {
+  background-color: #000102;
+  color: white;
+  border-radius: 4px;
+}
+
+/* DROPDOWN */
+.menu-suspenso {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  background-color: white;
+  min-width: 200px;
+  box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+  border-radius: 0 0 4px 4px;
+  list-style: none;
+  padding: 8px 0;
+  z-index: 1100;
+}
+
+.sub-item {
+  width: 100%;
+}
+
+.botao-sub-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 10px 20px;
+  color: #4a5568;
+  background: none;
+  border: none;
+  font-size: 14px;
+  cursor: pointer;
+  transition: 0.2s;
+}
+
+.botao-sub-item:hover {
+  background-color: #edf2f7;
+  color: #424242;
+}
+
+/* ÁREA DE CONTEÚDO */
+.conteudo-pagina {
+  padding: 60px 40px;
+  position: relative;
+  z-index: 10;
+}
+
+.boas-vindas {
+  text-align: center;
+  margin-top: 100px;
+}
+
+/* MARCA D'ÁGUA */
+.marca-dagua-fundo {
+  position: fixed;
+  top: 55%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 600px;
+  height: 600px;
+  background-image: url('/src/assets/logopages.png'); 
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: contain;
+  opacity: 0.15;
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* DESIGN EXCLUSIVO ATLAS ERP */
+.atlas-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  animation: fadeIn 0.3s ease-in;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.atlas-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 30px;
+  text-align: left;
+}
+
+.atlas-header h1 {
+  font-size: 28px;
+  color: #1a202c;
+  font-weight: 700;
+}
+
+.atlas-header p {
+  color: #718096;
+  font-size: 14px;
+}
+
+/* GRID E CARDS */
+.atlas-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+
+.atlas-card {
+  background: white;
+  border-radius: 12px;
+  padding: 24px;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  border: 1px solid #edf2f7;
+}
+
+.atlas-card.full {
+  grid-column: 1 / -1;
+}
+
+.card-titulo {
+  font-size: 16px;
+  font-weight: 600;
+  color: #2d3748;
+  margin-bottom: 20px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* FORMULÁRIOS */
+.atlas-linha {
+  display: flex;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+.atlas-campo {
+  flex: 1;
+  min-width: 200px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  text-align: left;
+}
+
+.atlas-campo label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #4a5568;
+}
+
+.atlas-campo input, .atlas-campo select {
+  padding: 12px;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 15px;
+  transition: all 0.2s;
+}
+
+.atlas-campo input:focus {
+  border-color: #3182ce;
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(66, 153, 225, 0.15);
+}
+
+/* TABELA */
+.atlas-tabela {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 10px;
+}
+
+.atlas-tabela th {
+  text-align: left;
+  padding: 12px;
+  background: #f7fafc;
+  color: #718096;
+  font-size: 12px;
+  text-transform: uppercase;
+}
+
+.atlas-tabela td {
+  padding: 10px;
+  border-bottom: 1px solid #edf2f7;
+}
+
+.input-tabela {
+  width: 100%;
+  border: none;
+  padding: 8px;
+  background: #f8fafc;
+  border-radius: 4px;
+}
+
+/* ÁREA DE UPLOAD E PREVIEW */
+.area-upload {
+  min-height: 300px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  border: 2px dashed #cbd5e0;
+  border-radius: 12px;
+  background-color: #f8fafc;
+  cursor: pointer;
+  transition: all 0.2s;
+  padding: 30px;
+  text-align: center;
+}
+
+.area-upload:hover {
+  border-color: #3182ce;
+  background-color: #ebf8ff;
+}
+
+.preview-documento-pdf {
+  position: relative;
+  width: 100%;
+  height: 300px;
+  background: #f1f5f9;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid #e2e8f0;
+}
+
+/* BOTÕES */
+.atlas-acoes {
+  display: flex;
+  gap: 12px;
+}
+
+.botao-primario {
+  background-color: #000000;
+  color: white;
+  padding: 12px 24px;
+  border-radius: 8px;
+  border: none;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.botao-primario:hover { background-color: #313131; }
+
+.botao-saida { background-color: #e53e3e; }
+
+.botao-secundario {
+  background: white;
+  border: 1.5px solid #e2e8f0;
+  padding: 12px 24px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.botao-adicionar {
+  background: none;
+  border: 2px dashed #e2e8f0;
+  width: 100%;
+  padding: 15px;
+  margin-top: 15px;
+  color: #718096;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.botao-remover {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  background: #ef4444;
+  color: white;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 4px;
+  font-weight: bold;
+  cursor: pointer;
+  z-index: 5;
+}
+
+/* GRID ESPECÍFICO DO DASHBOARD */
+.atlas-grid-dashboard {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 20px;
+}
+
+/* CARD COM ANIMAÇÃO AO PASSAR O MOUSE */
+.card-animado {
+  background: white;
+  border-radius: 12px;
+  padding: 20px;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+  transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+  cursor: default;
+  position: relative;
+  overflow: hidden;
+}
+
+.card-animado:hover {
+  transform: translateY(-8px); /* Eleva o card */
+  box-shadow: 0 14px 28px rgba(0,0,0,0.1), 0 10px 10px rgba(0,0,0,0.08);
+  border-color: transparent; /* Suaviza a borda na animação */
+}
+
+.card-label {
+  font-size: 11px;
+  font-weight: 800;
+  color: #718096;
+  letter-spacing: 1px;
+  display: block;
+  margin-bottom: 8px;
+}
+
+.card-valor {
+  font-size: 26px;
+  font-weight: 700;
+  color: #2d3748;
+}
+
+/* BARRAS DE PROGRESSO DECORATIVAS */
+.card-progresso {
+  height: 4px;
+  background: #edf2f7;
+  border-radius: 2px;
+  margin-top: 15px;
+  overflow: hidden;
+}
+
+.barra-azul { background: #3182ce; height: 100%; transition: width 1s ease; }
+.barra-verde { background: #38a169; height: 100%; transition: width 1s ease; }
+.barra-vermelha { background: #e53e3e; height: 100%; transition: width 1s ease; }
+.barra-amarela { background: #ecc94b; height: 100%; transition: width 1s ease; }
+
+/* EFEITO EXTRA DE BRILHO AO PASSAR O MOUSE NO CARD */
+.card-animado::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.2),
+    transparent
+  );
+  transition: 0.5s;
+}
+
+.card-animado:hover::after {
+  left: 100%;
+}
+
+/* ANIMAÇÃO PARA AS BARRAS DE PROGRESSO APARECEREM */
+@keyframes carregarBarra {
+  from { width: 0%; }
+  to { width: 70%; } /* Valor exemplo, pode ser dinâmico depois */
+}
+
+.barra-azul, .barra-verde, .barra-vermelha, .barra-amarela {
+  animation: carregarBarra 1.5s ease-out forwards;
+}
+
+/* MELHORIA NO TEXTO DE VALOR */
+.card-valor {
+  transition: color 0.3s ease;
+}
+
+.card-animado:hover .card-valor {
+  color: #1a202c; /* Escurece um pouco mais no hover */
+}
