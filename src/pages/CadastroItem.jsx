@@ -15,6 +15,7 @@ export default function CadastroItem({
         <div>
           <h1>Homologação de Produto</h1>
           <p>Inclusão de novos itens e conferência de mercadorias na doca</p>
+          <p></p>
         </div>
       </header>
       <div className="atlas-grid">
