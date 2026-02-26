@@ -1,4 +1,3 @@
-// src/pages/Entradas.jsx
 import React from 'react';
 
 export default function Entradas({
@@ -13,74 +12,117 @@ export default function Entradas({
   removerLinha,
   adicionarLinha
 }) {
+
+  // Calcula o valor total da Nota em tempo real
+  const subtotalNota = linhasItens.reduce((acc, item) => acc + ((Number(item.qtd) || 0) * (Number(item.valor) || 0)), 0);
+
   return (
     <div className="atlas-container">
       <header className="atlas-header">
-        <div><h1>Nova Entrada</h1><p>Recebimento de materiais e insumos</p></div>
-        <div className="atlas-acoes">
-          <button className="botao-secundario" onClick={() => setTelaAtiva('inicio')}>Cancelar</button>
-          <button className="botao-primario" onClick={confirmarEntradaComPendencia}>Confirmar Entrada</button>
+        <div>
+          <h1>Recebimento de Mercadorias</h1>
+          <p>Registre a entrada de NFs e encaminhe os itens para a doca de homologação</p>
         </div>
       </header>
-      
-      <div className="atlas-grid">
+
+      <div className="atlas-grid" style={{ alignItems: 'start' }}>
+        
+        {/* LADO ESQUERDO: DADOS DO DOCUMENTO */}
         <div className="atlas-card">
-          <div className="card-titulo">Informações da Carga</div>
+          <div className="card-titulo">
+            <span style={{ background: '#3182ce', color: 'white', padding: '4px 10px', borderRadius: '50%', marginRight: '8px' }}>1</span> 
+            Dados do Documento Fiscal
+          </div>
+          
           <div className="atlas-linha">
-            <div className="atlas-campo" style={{ flex: 2 }}>
-              <label>Fornecedor</label>
+            <div className="atlas-campo flex-2">
+              <label>Fornecedor / Emitente</label>
               <input type="text" id="forn-entrada" placeholder="Razão Social" />
             </div>
           </div>
-          <div className="atlas-linha" style={{ marginTop: '15px' }}>
+          
+          <div className="atlas-linha mt-15">
             <div className="atlas-campo">
-              <label>CNPJ</label>
+              <label>CNPJ do Emitente</label>
               <input type="text" id="cnpj-entrada" placeholder="00.000.000/0000-00" onChange={(e) => e.target.value = maskCNPJ(e.target.value)} />
             </div>
             <div className="atlas-campo">
-              <label>Data</label>
+              <label>Data de Emissão</label>
               <input type="date" id="data-entrada" defaultValue={new Date().toISOString().split('T')[0]} />
             </div>
           </div>
-        </div>
-        
-        <div className="atlas-card">
-          <div className="card-titulo">Nota Fiscal (PDF/Imagem)</div>
-          <div className="area-upload" onClick={() => !imagemAnexada && document.getElementById('upload-input').click()}>
-            <input type="file" id="upload-input" style={{ display: 'none' }} accept="image/*,application/pdf" onChange={manipularUpload} />
-            {imagemAnexada ? (
-              <div className="preview-documento-pdf">
-                <iframe src={imagemAnexada} title="Anexo" width="100%" height="100%" style={{border: 'none'}}></iframe>
-                <button className="botao-remover" onClick={(e) => { e.stopPropagation(); setImagemAnexada(null); }}>Trocar</button>
-              </div>
-            ) : (<><div className="icone-upload">🖨️</div><p>Anexar PDF</p></>)}
+
+          <div className="atlas-linha mt-20">
+            <div className="atlas-campo w-100">
+              <label>Anexar XML ou PDF (Opcional)</label>
+              <label className="area-upload">
+                <input type="file" style={{ display: 'none' }} accept="application/pdf,image/*,.xml" onChange={manipularUpload} />
+                {imagemAnexada ? (
+                  <div style={{ color: '#10b981', fontWeight: 'bold' }}>✅ Documento anexado com sucesso. Clique para trocar.</div>
+                ) : (
+                  <div style={{ color: '#718096' }}>📁 Clique aqui para selecionar o arquivo da Nota Fiscal no seu computador.</div>
+                )}
+              </label>
+            </div>
           </div>
         </div>
-        
-        <div className="atlas-card full">
-          <div className="card-titulo">Itens</div>
+
+        {/* LADO DIREITO: ITENS DA NOTA E CONFIRMAÇÃO */}
+        <div className="atlas-card">
+          <div className="card-titulo">
+            <span style={{ background: '#3182ce', color: 'white', padding: '4px 10px', borderRadius: '50%', marginRight: '8px' }}>2</span> 
+            Composição do Lote (Produtos)
+          </div>
+
           <table className="atlas-tabela">
             <thead>
-              <tr><th>Produto</th><th>Qtd</th><th>Lote</th><th>Marca</th><th>NCM</th><th>Unidades</th><th>Custo Unit.</th><th>Subtotal</th><th>Ação</th></tr>
+              <tr>
+                <th>Descrição do Produto</th>
+                <th>Volume (Qtd)</th>
+                <th>Custo Unit. (R$)</th>
+                <th>Subtotal (R$)</th>
+                <th>Ação</th>
+              </tr>
             </thead>
             <tbody>
               {linhasItens.map(linha => (
                 <tr key={linha.id}>
-                  <td><input type="text" className="input-tabela" placeholder="Nome do item" onChange={(e) => atualizarValorLinha(linha.id, 'nome_temp', e.target.value)} /></td>
-                  <td><input type="number" className="input-tabela" onChange={(e) => atualizarValorLinha(linha.id, 'qtd', e.target.value)} /></td>
-                  <td><input type="text" className="input-tabela" onChange={(e) => atualizarValorLinha(linha.id, 'lote_temp', e.target.value)} /></td>
-                  <td><input type="text" className="input-tabela" onChange={(e) => atualizarValorLinha(linha.id, 'marca_temp', e.target.value)} /></td>
-                  <td><input type="text" className="input-tabela" placeholder="000/XXX" onChange={(e) => atualizarValorLinha(linha.id, 'ncm_temp', e.target.value)} /></td>
-                  <td><input type="text" className="input-tabela" placeholder="Ex: 1" style={{width: '60px'}} onChange={(e) => atualizarValorLinha(linha.id, 'unid_temp', e.target.value)} /></td>
-                  <td><input type="number" className="input-tabela" placeholder="0.00" onChange={(e) => atualizarValorLinha(linha.id, 'valor', e.target.value)} /></td>
-                  <td className="valor-destaque">R$ {(linha.qtd * linha.valor).toFixed(2)}</td>
-                  <td><button onClick={() => removerLinha(linha.id)} className="botao-link" style={{color: 'red'}}>✖</button></td>
+                  <td>
+                    <input type="text" className="input-tabela" placeholder="Nome do item..." onChange={(e) => atualizarValorLinha(linha.id, 'nome_temp', e.target.value)} />
+                  </td>
+                  <td>
+                    <input type="number" className="input-tabela" min="1" placeholder="0" onChange={(e) => atualizarValorLinha(linha.id, 'qtd', e.target.value)} />
+                  </td>
+                  <td>
+                    <input type="number" className="input-tabela" min="0" placeholder="0.00" onChange={(e) => atualizarValorLinha(linha.id, 'valor', e.target.value)} />
+                  </td>
+                  <td className="texto-verde-bold">
+                    {((Number(linha.qtd) || 0) * (Number(linha.valor) || 0)).toFixed(2)}
+                  </td>
+                  <td>
+                    <button onClick={() => removerLinha(linha.id)} className="botao-link texto-vermelho">Excluir</button>
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
-          <button className="botao-adicionar" onClick={adicionarLinha}>+ Adicionar Item</button>
+
+          <button className="botao-adicionar" onClick={adicionarLinha}>+ Alocar Novo Produto da Nota</button>
+
+          {/* ÁREA DE RESUMO E FECHAMENTO */}
+          <div style={{ marginTop: '30px', padding: '20px', background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+              <span style={{ fontSize: '14px', color: '#64748b', fontWeight: 'bold' }}>VALOR TOTAL DA NOTA:</span>
+              <span style={{ fontSize: '24px', color: '#0f172a', fontWeight: '900' }}>R$ {subtotalNota.toFixed(2)}</span>
+            </div>
+            
+            <button className="botao-primario botao-sucesso w-100" onClick={confirmarEntradaComPendencia} style={{ padding: '15px', fontSize: '16px' }}>
+              📥 Processar Recebimento e Gerar Despesa
+            </button>
+          </div>
+
         </div>
+
       </div>
     </div>
   );

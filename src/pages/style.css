@@ -1,0 +1,253 @@
+/* TELA DE INÍCIO E BLOQUEIO */
+.tela-centralizada {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    height: 70vh;
+    text-align: center;
+}
+
+.logo-inicio {
+    opacity: 0.15;
+    max-width: 400px;
+    pointer-events: none;
+    margin-bottom: 20px;
+}
+
+.texto-sessao {
+    color: #64748b;
+    font-size: 14px;
+}
+
+.icone-bloqueado {
+    font-size: 60px;
+    margin: 0;
+}
+
+.titulo-bloqueado {
+    color: #0f172a;
+}
+
+.texto-bloqueado {
+    color: #64748b;
+}
+
+/* CORES DE BORDA DOS CARDS */
+.card-borda-verde {
+    border-top: 4px solid #10b981;
+}
+
+.card-borda-amarela {
+    border-top: 4px solid #ecc94b;
+}
+
+.card-borda-vermelha {
+    border-top: 4px solid #ef4444;
+}
+
+.card-borda-roxa {
+    border-top: 4px solid #8b5cf6;
+}
+
+.card-borda-azul {
+    border-top: 4px solid #3b82f6;
+}
+
+/* RELATÓRIOS E MÉTRICAS */
+.metricas-grid {
+    margin-bottom: 20px;
+}
+
+.metrica-card-azul {
+    text-align: center;
+    background-color: #e0f2fe;
+}
+
+.metrica-titulo-azul {
+    margin: 0;
+    color: #0369a1;
+}
+
+.metrica-valor-azul {
+    font-size: 30px;
+    margin: 10px 0 0 0;
+    color: #0c4a6e;
+}
+
+.metrica-card-cinza {
+    text-align: center;
+    background-color: #f8fafc;
+}
+
+.metrica-titulo-cinza {
+    margin: 0;
+    color: #475569;
+}
+
+.metrica-valor-cinza {
+    font-size: 30px;
+    margin: 10px 0 0 0;
+    color: #1e293b;
+}
+
+/* DETALHES DE CLIENTE BOX */
+.detalhes-cliente-box {
+    margin-top: 20px;
+    padding: 15px;
+    background: #f8fafc;
+    border: 1px dashed #cbd5e1;
+    border-radius: 8px;
+}
+
+.detalhes-cliente-titulo {
+    margin: 0 0 10px 0;
+    color: #334155;
+}
+
+.detalhes-cliente-lista {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    font-size: 14px;
+    color: #475569;
+}
+
+.margin-top-10 {
+    margin-top: 10px;
+}
+
+/* CENTRAL DE PDFs E EXPORTAÇÃO */
+.card-centro {
+    text-align: center;
+}
+
+.icone-gigante {
+    font-size: 40px;
+    margin: 10px 0;
+}
+
+.btn-bg-roxo {
+    background-color: #8b5cf6;
+    border: none;
+}
+
+.btn-bg-verde {
+    background-color: #10b981;
+    border: none;
+}
+
+.btn-bg-azul {
+    background-color: #3b82f6;
+    border: none;
+}
+
+.btn-bg-amarelo {
+    background-color: #d69e2e;
+    border: none;
+}
+
+.btn-gigante {
+    padding: 15px;
+    font-size: 16px;
+}
+
+/* STATUS REQUISIÇÕES E BOTÕES GERENCIAIS */
+.status-concluida {
+    font-weight: bold;
+    color: #10b981;
+}
+
+.status-negada {
+    font-weight: bold;
+    color: #ef4444;
+}
+
+.status-pendente {
+    font-weight: bold;
+    color: #f59e0b;
+}
+
+.status-restrito {
+    font-size: 11px;
+    color: #94a3b8;
+}
+
+.botoes-acao-linha {
+    display: flex;
+    gap: 5px;
+}
+
+.btn-pequeno-verde-outline {
+    border-color: #10b981;
+    color: #10b981;
+    padding: 4px 8px;
+    font-size: 11px;
+    background: transparent;
+    cursor: pointer;
+    border: 1px solid;
+    border-radius: 4px;
+}
+
+.btn-pequeno-vermelho-outline {
+    border-color: #ef4444;
+    color: #ef4444;
+    padding: 4px 8px;
+    font-size: 11px;
+    background: transparent;
+    cursor: pointer;
+    border: 1px solid;
+    border-radius: 4px;
+}
+
+.btn-pequeno-verde-fill {
+    background-color: #10b981;
+    padding: 4px 8px;
+    font-size: 11px;
+    color: white;
+    border: none;
+    cursor: pointer;
+    border-radius: 4px;
+}
+
+/* TABELAS E FONTES COMUNS */
+.input-destaque-centro {
+    font-size: 20px;
+    font-weight: bold;
+    text-align: center;
+}
+
+.linha-receita {
+    background-color: #f0fdf4;
+}
+
+.linha-despesa {
+    background-color: #fef2f2;
+}
+
+.texto-receita {
+    font-weight: bold;
+    color: #16a34a;
+}
+
+.texto-despesa {
+    font-weight: bold;
+    color: #dc2626;
+}
+
+.font-11 {
+    font-size: 11px;
+}
+
+.font-12 {
+    font-size: 12px;
+}
+
+.font-13 {
+    font-size: 13px;
+}
+
+.bold-verde {
+    font-weight: bold;
+    color: #10b981;
+}
