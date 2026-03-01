@@ -1,5 +1,4 @@
 import React from 'react';
-import './style.css'; 
 
 export default function RelatorioVendas({ historicoVendas, vendaExpandidaId, setVendaExpandidaId }) {
   const montanteVendido = historicoVendas.reduce((acc, v) => acc + Number(v.valor_total), 0);

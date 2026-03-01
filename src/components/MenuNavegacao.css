@@ -1,7 +1,9 @@
 /* =========================================
    ESTILOS DO MENU SUPERIOR (CENTRALIZADO)
 ========================================= */
-
+*{
+  font-family:"Montserrat", sans-serif;;
+}
 .mega-menu-topo {
   display: flex;
   align-items: center;
@@ -22,12 +24,11 @@
   white-space: nowrap;
   flex-shrink: 0;
   user-select: none;
-  cursor: pointer; /* Estilo extraído do JS */
+  cursor: pointer; 
 }
 
 .menu-logo-destaque {
-  color: #ffffff; /* Estilo extraído do JS */
-  font-weight: 900;
+  color: #ffffff;
   font-size: 20px;
 }
 
@@ -123,4 +124,20 @@
 .botao-sair:hover {
   background-color: #ff0808;
   color: rgb(253, 253, 253);
+}
+
+
+.sidebar-ou-nav {
+  width: 260px; 
+  min-width: 260px;
+  height: 100dvh;
+  background-color: #000000;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+}
+.item-menu-texto {
+  font-size: 14px;
+  white-space: nowrap;
 }

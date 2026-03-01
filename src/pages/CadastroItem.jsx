@@ -1,12 +1,8 @@
+import React from 'react';
 
 export default function CadastroItem({ 
-  estoque, 
-  salvarCadastroItem, 
-  itensPendentesEntrada, 
-  prepararAceite, 
-  cancelarPendencia 
+  estoque, salvarCadastroItem, itensPendentesEntrada, prepararAceite, cancelarPendencia 
 }) {
-  // Puxa as categorias que já existem no banco
   const categoriasExistentes = [...new Set(estoque.map(i => i.categoria))].filter(Boolean).sort();
 
   return (
@@ -15,17 +11,15 @@ export default function CadastroItem({
         <div>
           <h1>Homologação de Produto</h1>
           <p>Inclusão de novos itens e conferência de mercadorias na doca</p>
-          <p></p>
         </div>
       </header>
       <div className="atlas-grid">
-        
-        {/* LADO ESQUERDO: FORMULÁRIO DE CADASTRO */}
+
         <div className="atlas-card">
           <datalist id="lista-categorias">
             {categoriasExistentes.map((cat, index) => (<option key={index} value={cat} />))}
           </datalist>
-          
+
           <div className="atlas-linha">
             <div className="atlas-campo"><label>SKU</label><input type="text" id="sku-item" /></div>
             <div className="atlas-campo"><label>Descrição</label><input type="text" id="nome-item" /></div>
@@ -43,7 +37,6 @@ export default function CadastroItem({
           <button className="botao-primario w-100 mt-30" onClick={salvarCadastroItem}>Finalizar Homologação</button>
         </div>
 
-        {/* LADO DIREITO: DOCA DE PENDÊNCIAS RESTAURADA */}
         <div className="atlas-card card-alerta">
           <div className="card-titulo">Doca: Pendências de Recebimento</div>
           <div className="lista-rolavel">
@@ -51,7 +44,7 @@ export default function CadastroItem({
               <div key={p.id} className="item-pendente">
                 <div className="item-pendente-titulo">{p.nome || "Não Identificado"}</div>
                 <div className="item-pendente-sub">
-                  Volume: {p.quantidade} | Custo Unit.: R$ {p.custo_unitario} <br /> 
+                  Volume: {p.quantidade} | Custo Unit.: R$ {p.custo_unitario} <br />
                   Emitente: {p.fornecedor || "Não Informado"}
                 </div>
                 <div className="botoes-acao">
@@ -60,11 +53,10 @@ export default function CadastroItem({
                 </div>
               </div>
             )) : (
-              <p className="font-12" style={{ color: '#718096' }}>Nenhuma mercadoria aguardando conferência na doca.</p>
+              <p className="font-12 texto-cinza">Nenhuma mercadoria aguardando conferência na doca.</p>
             )}
           </div>
         </div>
-
       </div>
     </div>
   );

@@ -1,9 +1,9 @@
-/* RESET BÁSICO E ESTRUTURA */
+/*  1. RESET BÁSICO E ESTRUTURA */
 * {
   margin: 0;
   padding: 0;
   box-sizing: border-box;
-  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  font-family: "Montserrat", sans-serif;
 }
 
 body {
@@ -14,16 +14,18 @@ body {
 .container-principal {
   min-height: 100vh;
   position: relative;
+  min-width: 1050px; 
 }
 
 .conteudo-pagina {
   padding: 60px 40px;
   position: relative;
   z-index: 10;
+  min-width: 1000px;
 }
 
 .atlas-container {
-  max-width: 1200px;
+  width: 1000px; 
   margin: 0 auto;
   animation: fadeIn 0.3s ease-in;
 }
@@ -39,7 +41,7 @@ body {
   }
 }
 
-/* CABEÇALHOS E GRIDS */
+/* 2. CABEÇALHOS E GRIDS */
 .atlas-header {
   display: flex;
   justify-content: space-between;
@@ -73,13 +75,14 @@ body {
   align-items: flex-start;
 }
 
-/* CARDS PRINCIPAIS */
+/*  3. CARDS PRINCIPAIS E BORDAS*/
 .atlas-card {
   background: white;
   border-radius: 12px;
   padding: 24px;
   box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
   border: 1px solid #edf2f7;
+  overflow-x: auto; 
 }
 
 .atlas-card.full {
@@ -106,7 +109,36 @@ body {
   background: #fffaf0;
 }
 
-/* BORDAS LATERAIS DO DASHBOARD */
+.card-centro {
+  text-align: center;
+}
+
+/* Bordas Superiores Coloridas */
+.card-borda-verde {
+  border-top: 4px solid #10b981;
+}
+
+.card-borda-amarela {
+  border-top: 4px solid #ecc94b;
+}
+
+.card-borda-vermelha {
+  border-top: 4px solid #ef4444;
+}
+
+.card-borda-roxa {
+  border-top: 4px solid #8b5cf6;
+}
+
+.card-borda-azul {
+  border-top: 4px solid #3b82f6;
+}
+
+.border-top-laranja {
+  border-top: 4px solid #f59e0b;
+}
+
+/* Bordas Laterais do Dashboard */
 .border-left-verde {
   border-left: 4px solid #10b981;
 }
@@ -123,11 +155,7 @@ body {
   border-left: 4px solid #8b5cf6;
 }
 
-.border-top-laranja {
-  border-top: 4px solid #f59e0b;
-}
-
-/* FORMULÁRIOS E INPUTS */
+/* 4. FORMULÁRIOS E INPUTS */
 .atlas-linha {
   display: flex;
   gap: 20px;
@@ -176,7 +204,13 @@ body {
   border-color: #ecc94b !important;
 }
 
-/* TABELAS */
+.input-destaque-centro {
+  font-size: 20px;
+  font-weight: bold;
+  text-align: center;
+}
+
+/*  5. TABELAS */
 .atlas-tabela {
   width: 100%;
   border-collapse: collapse;
@@ -205,7 +239,26 @@ body {
   border-radius: 4px;
 }
 
-/* BOTÕES GERAIS */
+/* Tabela Extrato Financeiro */
+.linha-receita {
+  background-color: #f0fdf4;
+}
+
+.linha-despesa {
+  background-color: #fef2f2;
+}
+
+.texto-receita {
+  font-weight: bold;
+  color: #16a34a;
+}
+
+.texto-despesa {
+  font-weight: bold;
+  color: #dc2626;
+}
+
+/* 6. BOTÕES */
 .atlas-acoes {
   display: flex;
   gap: 12px;
@@ -276,12 +329,100 @@ body {
   background-color: #e53e3e;
 }
 
+.btn-bg-roxo {
+  background-color: #8b5cf6;
+  border: none;
+  color: white;
+}
+
+.btn-bg-verde {
+  background-color: #10b981;
+  border: none;
+  color: white;
+}
+
+.btn-bg-azul {
+  background-color: #3b82f6;
+  border: none;
+  color: white;
+}
+
+.btn-bg-amarelo {
+  background-color: #d69e2e;
+  border: none;
+  color: white;
+}
+
+.btn-bg-black {
+  background-color: #000000;
+  border: none;
+  color: white;
+}
+
+.btn-gigante {
+  padding: 15px;
+  font-size: 16px;
+}
+
 .btn-pequeno-solicitar {
   font-size: 11px;
   padding: 6px 12px;
 }
 
-/* TELA DE LOGIN */
+.botoes-acao-linha {
+  display: flex;
+  gap: 5px;
+}
+
+.btn-pequeno-verde-outline {
+  border: 1px solid #10b981;
+  color: #10b981;
+  padding: 4px 8px;
+  font-size: 11px;
+  background: transparent;
+  cursor: pointer;
+  border-radius: 4px;
+}
+
+.btn-pequeno-vermelho-outline {
+  border: 1px solid #ef4444;
+  color: #ef4444;
+  padding: 4px 8px;
+  font-size: 11px;
+  background: transparent;
+  cursor: pointer;
+  border-radius: 4px;
+}
+
+.btn-pequeno-verde-fill {
+  background-color: #10b981;
+  padding: 4px 8px;
+  font-size: 11px;
+  color: white;
+  border: none;
+  cursor: pointer;
+  border-radius: 4px;
+}
+
+/* 7. TELA DE LOGIN E ESTADOS DE BLOQUEIO */
+.tela-centralizada {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  height: 70vh;
+  text-align: center;
+}
+
+.tela-bloqueada {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 60vh;
+  text-align: center;
+}
+
 .tela-login-container {
   display: flex;
   justify-content: center;
@@ -317,7 +458,41 @@ body {
   font-size: 16px;
 }
 
-/* UTILITÁRIOS E MARGENS */
+.logo-inicio {
+  opacity: 0.15;
+  max-width: 400px;
+  pointer-events: none;
+  margin-bottom: 20px;
+}
+
+.texto-sessao {
+  color: #64748b;
+  font-size: 14px;
+}
+
+.icone-gigante {
+  font-size: 60px;
+  margin: 0;
+}
+
+.icone-card {
+  font-size: 40px;
+  margin: 10px 0;
+}
+
+.titulo-escuro {
+  color: #0f172a;
+}
+
+.texto-cinza {
+  color: #64748b;
+}
+
+/* 8. UTILITÁRIOS GERAIS */
+.display-none {
+  display: none;
+}
+
 .mt-15 {
   margin-top: 15px;
 }
@@ -334,14 +509,6 @@ body {
   margin-bottom: 20px;
 }
 
-.w-100 {
-  width: 100%;
-}
-
-.flex-2 {
-  flex: 2;
-}
-
 .margin-bottom-20 {
   margin-bottom: 20px;
 }
@@ -350,11 +517,38 @@ body {
   margin-bottom: 30px;
 }
 
+.margin-top-10 {
+  margin-top: 10px;
+}
+
+.margin-top-30 {
+  margin-top: 30px;
+}
+
 .margin-top-50 {
   margin-top: 50px;
 }
 
-/* CORES DE TEXTO DINÂMICAS */
+.w-100 {
+  width: 100%;
+}
+
+.flex-2 {
+  flex: 2;
+}
+
+.font-11 {
+  font-size: 11px;
+}
+
+.font-12 {
+  font-size: 12px;
+}
+
+.font-13 {
+  font-size: 13px;
+}
+
 .texto-verde-bold {
   color: #10b981;
   font-weight: bold;
@@ -373,6 +567,14 @@ body {
   color: #3b82f6;
 }
 
+.texto-vermelho {
+  color: #ef4444;
+}
+
+.texto-verde {
+  color: #10b981;
+}
+
 .texto-roxo {
   color: #8b5cf6;
 }
@@ -383,12 +585,16 @@ body {
   color: #64748b;
 }
 
-/* DASHBOARD: CARDS E GRÁFICOS */
+.bold-verde {
+  font-weight: bold;
+  color: #10b981;
+}
+
+/*   9. DASHBOARD: CARDS FINANCEIROS E GRÁFICOS */
 .dashboard-corp-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
   gap: 20px;
-  margin-bottom: 25px;
 }
 
 .card-corp {
@@ -457,7 +663,7 @@ body {
   margin-top: 10px;
 }
 
-/* DASHBOARD: LISTAS E ALERTAS */
+/* 10. DASHBOARD: LISTAS E ALERTAS */
 .lista-limpa {
   list-style: none;
   padding: 0;
@@ -526,4 +732,203 @@ body {
 .texto-panorama-valor {
   font-weight: 900;
   color: #0f172a;
+}
+
+/* 11. COMPONENTES: RECEBIMENTOS, DETALHES E MÉTRICAS */
+.badge-passo {
+  background-color: #3182ce;
+  color: white;
+  padding: 4px 10px;
+  border-radius: 50%;
+  margin-right: 8px;
+}
+
+.caixa-resumo {
+  padding: 20px;
+  background-color: #f8fafc;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+}
+
+.resumo-linha {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.resumo-label {
+  font-size: 14px;
+  color: #64748b;
+  font-weight: bold;
+}
+
+.resumo-valor {
+  font-size: 24px;
+  color: #0f172a;
+  font-weight: 900;
+}
+
+.metricas-grid {
+  margin-bottom: 20px;
+}
+
+.metrica-card-azul {
+  text-align: center;
+  background-color: #e0f2fe;
+}
+
+.metrica-titulo-azul {
+  margin: 0;
+  color: #0369a1;
+}
+
+.metrica-valor-azul {
+  font-size: 30px;
+  margin: 10px 0 0 0;
+  color: #0c4a6e;
+}
+
+.metrica-card-cinza {
+  text-align: center;
+  background-color: #f8fafc;
+}
+
+.metrica-titulo-cinza {
+  margin: 0;
+  color: #475569;
+}
+
+.metrica-valor-cinza {
+  font-size: 30px;
+  margin: 10px 0 0 0;
+  color: #1e293b;
+}
+
+.detalhes-cliente-box {
+  margin-top: 20px;
+  padding: 15px;
+  background: #f8fafc;
+  border: 1px dashed #cbd5e1;
+  border-radius: 8px;
+}
+
+.detalhes-cliente-titulo {
+  margin: 0 0 10px 0;
+  color: #334155;
+}
+
+.detalhes-cliente-lista {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  font-size: 14px;
+  color: #475569;
+}
+
+.status-concluida {
+  font-weight: bold;
+  color: #10b981;
+}
+
+.status-negada {
+  font-weight: bold;
+  color: #ef4444;
+}
+
+.status-pendente {
+  font-weight: bold;
+  color: #f59e0b;
+}
+
+.status-restrito {
+  font-size: 11px;
+  color: #94a3b8;
+}
+
+/* 12. PAINEL DE PDV E CARRINHO */
+.coluna-flex {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.separador-tracejado {
+  border: none;
+  border-top: 1px dashed #cbd5e1;
+  margin: 20px 0;
+}
+
+.container-tabela-carrinho {
+  min-height: 250px;
+  max-height: 350px;
+  overflow-y: auto;
+  margin-bottom: 20px;
+}
+
+.totalizador-venda {
+  padding: 20px;
+  background-color: #f0fdf4;
+  border-radius: 8px;
+  border: 1px solid #bbf7d0;
+  text-align: right;
+}
+
+.totalizador-venda-label {
+  font-size: 14px;
+  color: #166534;
+  font-weight: bold;
+}
+
+.totalizador-venda-valor {
+  font-size: 36px;
+  color: #16a34a;
+  font-weight: 900;
+}
+
+.totalizador-estorno {
+  padding: 20px;
+  background-color: #fef2f2;
+  border-radius: 8px;
+  border: 1px solid #fecaca;
+  text-align: right;
+}
+
+.totalizador-estorno-label {
+  font-size: 14px;
+  color: #991b1b;
+  font-weight: bold;
+}
+
+.totalizador-estorno-valor {
+  font-size: 36px;
+  color: #dc2626;
+  font-weight: 900;
+}
+
+.texto-centro {
+  text-align: center;
+}
+
+/*  13. MEDIA QUERY: RESPONSIVIDADE E DVH */
+@media (max-width: 1050px) {
+  body, html {
+    overflow-x: hidden; /
+  }
+
+  .container-principal {
+    min-width: 100%; 
+  }
+
+  .conteudo-pagina {
+    height: 100dvh; 
+    overflow-y: auto; 
+    overflow-x: auto; 
+    min-width: 0; 
+    padding: 20px;
+  }
+
+  .atlas-container {
+    width: 1000px; 
+    margin: 0 auto;
+  }
 }

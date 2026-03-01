@@ -1,13 +1,12 @@
 import React from 'react';
-import './style.css'; 
 
 export default function ExtratoFinanceiro({ historicoVendas, historicoDespesas }) {
   const totalRec = historicoVendas.reduce((acc, v) => acc + Number(v.valor_total), 0);
   const totalDesp = historicoDespesas.reduce((acc, d) => acc + Number(d.valor_total), 0);
   const saldoFinal = totalRec - totalDesp;
-  
+
   const extratoUnificado = [
-    ...historicoVendas.map(v => ({ id: `v_${v.id}`, data: v.created_at, desc: `Venda: ${v.produto_nome}`, doc: v.cliente, valor: Number(v.valor_total), tipo: 'RECEITA' })), 
+    ...historicoVendas.map(v => ({ id: `v_${v.id}`, data: v.created_at, desc: `Venda: ${v.produto_nome}`, doc: v.cliente, valor: Number(v.valor_total), tipo: 'RECEITA' })),
     ...historicoDespesas.map(d => ({ id: `d_${d.id}`, data: d.created_at, desc: d.descricao, doc: d.fornecedor || 'N/A', valor: Number(d.valor_total), tipo: 'DESPESA' }))
   ].sort((a, b) => new Date(b.data) - new Date(a.data));
 
@@ -25,7 +24,7 @@ export default function ExtratoFinanceiro({ historicoVendas, historicoDespesas }
         </div>
         <div className={`card-corp ${saldoFinal >= 0 ? 'card-borda-azul' : 'card-borda-vermelha'}`}>
           <div className="card-corp-header"><span className="card-corp-title">Saldo Líquido</span></div>
-          <div className="card-corp-value" style={{ color: saldoFinal >= 0 ? '#3b82f6' : '#ef4444' }}>
+          <div className={`card-corp-value ${saldoFinal >= 0 ? 'texto-azul' : 'texto-vermelho'}`}>
             R$ {saldoFinal.toFixed(2)}
           </div>
         </div>

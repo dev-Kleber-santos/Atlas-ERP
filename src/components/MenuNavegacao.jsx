@@ -5,7 +5,6 @@ export default function MenuNavegacao({ itensMenu, setTelaAtiva, usuarioAtual, r
   return (
     <nav className="mega-menu-topo">
       
-      {/* AQUI ESTÁ O CLIQUE: Agora a logo funciona como um botão para a Home */}
       <div className="menu-logo" onClick={() => setTelaAtiva('inicio')}>
         <span className="menu-logo-destaque">ATLAS</span> ERP
       </div>
