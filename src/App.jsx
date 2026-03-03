@@ -15,14 +15,17 @@ import RelatorioVendas from './pages/RelatorioVendas.jsx';
 import ExtratoFinanceiro from './pages/ExtratoFinanceiro.jsx';
 import PainelRequisicoes from './pages/PainelRequisicoes.jsx';
 import EmissaoRecibo from './pages/EmissaoRecibo.jsx';
+import ControleCaixa from './pages/ControleCaixa.jsx';
 
 import logoAtlas from './assets/logopages.png';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { jsPDF } from "jspdf";
 import autoTable from 'jspdf-autotable';
+import ExcelJS from 'exceljs';
+import { saveAs } from 'file-saver';
 
-function App() {
+export default function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [usuarioAtual, setUsuarioAtual] = useState('');
   const [usuarioRole, setUsuarioRole] = useState('');
@@ -31,51 +34,76 @@ function App() {
 
   const [telaAtiva, setTelaAtiva] = useState('inicio');
   const [imagemAnexada, setImagemAnexada] = useState(null);
-
   const [vendaExpandidaId, setVendaExpandidaId] = useState(null);
+
+  const [caixaAtivo, setCaixaAtivo] = useState(null);
+  const [historicoCaixa, setHistoricoCaixa] = useState([]);
+
+  const [favoritos, setFavoritos] = useState(['vendas', 'cadastro-de-item', 'nova-requisicao']);
 
   const [estoque, setEstoque] = useState([]);
   const [logEstoque, setLogEstoque] = useState([]);
   const [historicoVendas, setHistoricoVendas] = useState([]);
   const [historicoDespesas, setHistoricoDespesas] = useState([]);
-
   const [itensPendentesEntrada, setItensPendentesEntrada] = useState([]);
   const [itemEmEdicao, setItemEmEdicao] = useState(null);
   const [valorTotalEntradas, setValorTotalEntradas] = useState(0);
   const [notasFiscais, setNotasFiscais] = useState([]);
-
   const [listaRequisicoes, setListaRequisicoes] = useState([]);
   const [listaFornecedores, setListaFornecedores] = useState([]);
   const [solicitacoesCotacao, setSolicitacoesCotacao] = useState([]);
   const [pedidosOficiais, setPedidosOficiais] = useState([]);
   const [listaDevolucoes, setListaDevolucoes] = useState([]);
-  
-  // NOVO: Estado para a lista de usuários
   const [listaUsuarios, setListaUsuarios] = useState([]);
-
   const [linhasItens, setLinhasItens] = useState([{ id: Date.now(), qtd: 0, valor: 0, vlrA: 0, vlrB: 0, vlrC: 0 }]);
   const [termoBusca, setTermoBusca] = useState('');
 
-  const itensMenu = [
-    { nome: 'Inicio', slug: 'inicio', filhos: ['Dashboard'] },
-    { nome: 'Produtos', slug: 'produtos', filhos: ['Consultar Itens', 'Cadastro de Item', 'Categorias'] },
-    { nome: 'Estoque & Logistica', slug: 'estoque', filhos: ['Entradas', 'Saidas', 'Ajustes', 'Log de Estoque'] },
-    { nome: 'Gestao de Compras', slug: 'compras', filhos: ['Sugestoes de Compras', 'Cotacoes', 'Pedidos', 'Fornecedores'] },
-    { nome: 'Vendas & PDV', slug: 'vendas', filhos: ['Vendas', 'Devolucoes'] },
-    { nome: 'Notas Fiscais', slug: 'nfe', filhos: ['Emissao de NF'] },
-    { nome: 'Relatorios', slug: 'relatorios', filhos: ['Receitas e Despesas', 'Detalhes de Vendas', 'Exportar PDFs'] },
-    { nome: 'Requisicoes', slug: 'requisicoes', filhos: ['Nova Requisicao', 'Painel de Requisicoes'] },
-    { nome: 'Configuracoes', slug: 'config', filhos: ['Gerenciar Usuarios'] }
+  const [dataInicioEncalhado, setDataInicioEncalhado] = useState('');
+  const [dataFimEncalhado, setDataFimEncalhado] = useState('');
+
+  const menuBase = [
+    { nome: 'Inicio', filhos: ['Dashboard'] },
+    { nome: 'Produtos', filhos: ['Consultar Itens', 'Cadastro de Item', 'Categorias'] },
+    { nome: 'Estoque & Logistica', filhos: ['Entradas', 'Saidas', 'Ajustes', 'Log de Estoque'] },
+    { nome: 'Gestao de Compras', filhos: ['Sugestoes de Compras', 'Cotacoes', 'Pedidos', 'Fornecedores'] },
+    { nome: 'Vendas & PDV', filhos: ['Vendas', 'Devolucoes', 'Controle de Caixa'] },
+    { nome: 'Notas Fiscais', filhos: ['Emissao de NF'] },
+    { nome: 'Relatorios', filhos: ['Receitas e Despesas', 'Detalhes de Vendas', 'Exportacoes e BI', 'Posicao de Estoque', 'Historico de Vendas', 'Notas de Entrada', 'Historico de Devolucoes', 'Historico de Caixa'] },
+    { nome: 'Requisicoes', filhos: ['Nova Requisicao', 'Painel de Requisicoes'] },
+    { nome: 'Configuracoes', filhos: ['Gerenciar Usuarios'] }
   ];
 
-  useEffect(() => {
-    if (isLoggedIn) {
-      buscarEstoqueReal(); buscarLogReal(); buscarVendasReal(); buscarDespesasReal();
-      buscarFornecedoresReal(); buscarPendenciasReal(); buscarNotasReal();
-      buscarCotacoesReal(); buscarPedidosReal(); buscarDevolucoesReal(); buscarRequisicoesReal();
-      buscarUsuariosReal();
+  // FILTRO DE ACESSO (3 NIVEIS: Admin, Gerente, Caixa)
+  const itensMenu = menuBase.filter(categoria => {
+    if (usuarioRole === 'admin') return true;
+    if (usuarioRole === 'gerente') {
+      const categoriasGerente = ['Inicio', 'Produtos', 'Estoque & Logistica', 'Gestao de Compras', 'Vendas & PDV', 'Notas Fiscais', 'Relatorios', 'Requisicoes'];
+      return categoriasGerente.includes(categoria.nome);
     }
-  }, [isLoggedIn]);
+    if (usuarioRole === 'caixa') {
+      const categoriasCaixa = ['Inicio', 'Vendas & PDV', 'Produtos', 'Requisicoes'];
+      return categoriasCaixa.includes(categoria.nome);
+    }
+    return false;
+  }).map(categoria => {
+    if (usuarioRole === 'caixa' && categoria.nome === 'Vendas & PDV') return { ...categoria, filhos: ['Vendas', 'Controle de Caixa'] };
+    if (usuarioRole === 'caixa' && categoria.nome === 'Produtos') return { ...categoria, filhos: ['Consultar Itens'] };
+    if (usuarioRole === 'caixa' && categoria.nome === 'Requisicoes') return { ...categoria, filhos: ['Nova Requisicao'] };
+    return categoria;
+  });
+
+  const nomesDasTelas = {
+    'dashboard': 'Painel', 'vendas': 'PDV', 'devolucoes': 'Devolucao',
+    'cadastro-de-item': 'Novo Item', 'consultar-itens': 'Estoque',
+    'entradas': 'Entrada', 'saidas': 'Saida', 'nova-requisicao': 'Pedido',
+    'painel-de-requisicoes': 'Aprovacao', 'exportacoes-e-bi': 'Exportar'
+  };
+
+  const gerarSlug = (texto) => texto.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^\w\s-]/g, '').replace(/\s+/g, '-');
+
+  const categoriaAtual = itensMenu.find(cat => cat.filhos.some(f => gerarSlug(f) === telaAtiva));
+  const mostrarMenuEsquerdo = categoriaAtual && categoriaAtual.filhos.length > 1 && telaAtiva !== 'inicio' && telaAtiva !== 'dashboard';
+  const mostrarSidebar = telaAtiva !== 'inicio';
 
   const buscarEstoqueReal = async () => { const { data } = await supabase.from('estoque').select('*'); if (data) setEstoque(data); };
   const buscarLogReal = async () => { const { data } = await supabase.from('log_movimentacao').select('*').order('created_at', { ascending: false }); if (data) setLogEstoque(data); };
@@ -88,70 +116,74 @@ function App() {
   const buscarPedidosReal = async () => { const { data } = await supabase.from('pedidos_compra').select('*').order('created_at', { ascending: false }); if (data) setPedidosOficiais(data); };
   const buscarDevolucoesReal = async () => { const { data } = await supabase.from('devolucoes').select('*').order('created_at', { ascending: false }); if (data) setListaDevolucoes(data); };
   const buscarRequisicoesReal = async () => { const { data } = await supabase.from('requisicoes_internas').select('*').order('created_at', { ascending: false }); if (data) setListaRequisicoes(data); };
-  
-  // NOVO: Busca de usuários
   const buscarUsuariosReal = async () => { const { data } = await supabase.from('usuarios').select('*'); if (data) setListaUsuarios(data); };
+  const buscarHistoricoCaixa = async () => { const { data } = await supabase.from('fluxos_caixa').select('*').order('data_abertura', { ascending: false }); if (data) setHistoricoCaixa(data); };
+
+  const verificarCaixaAberto = async () => {
+    const { data } = await supabase.from('fluxos_caixa').select('*').eq('status', 'aberto').order('data_abertura', { ascending: false }).limit(1).single();
+    if (data) setCaixaAtivo(data);
+  };
+
+  useEffect(() => {
+    if (isLoggedIn) {
+      buscarEstoqueReal(); buscarLogReal(); buscarVendasReal(); buscarDespesasReal();
+      buscarFornecedoresReal(); buscarPendenciasReal(); buscarNotasReal();
+      buscarCotacoesReal(); buscarPedidosReal(); buscarDevolucoesReal(); buscarRequisicoesReal();
+      buscarUsuariosReal();
+      verificarCaixaAberto();
+      buscarHistoricoCaixa();
+    }
+  }, [isLoggedIn]);
+
+  const gerenciarFavoritos = () => {
+    if (favoritos.includes(telaAtiva)) {
+      setFavoritos(favoritos.filter(f => f !== telaAtiva));
+    } else {
+      setFavoritos([...favoritos, telaAtiva]);
+    }
+  };
+
+  const abrirCaixa = async (valorInicial) => {
+    const { data, error } = await supabase.from('fluxos_caixa').insert([{ usuario_abertura: usuarioAtual, valor_inicial: Number(valorInicial), status: 'aberto' }]).select().single();
+    if (data) { setCaixaAtivo(data); toast.success("Caixa aberto com sucesso! PDV liberado."); buscarHistoricoCaixa(); }
+    else { toast.error("Erro ao abrir o caixa no sistema."); }
+  };
+
+  const fecharCaixa = async (valorFisico, valorEsperado, totalVendido) => {
+    const diferenca = Number(valorFisico) - Number(valorEsperado);
+    const { error } = await supabase.from('fluxos_caixa').update({ status: 'fechado', usuario_fechamento: usuarioAtual, data_fechamento: new Date().toISOString(), valor_final_sistema: Number(valorEsperado), valor_final_fisico: Number(valorFisico), observacoes: `Total Vendido: R$ ${totalVendido.toFixed(2)} | Diferenca: R$ ${diferenca.toFixed(2)}` }).eq('id', caixaAtivo.id);
+    if (!error) {
+      setCaixaAtivo(null);
+      if (diferenca === 0) toast.success(`Caixa fechado perfeitamente. Saldo exato!`);
+      else if (diferenca > 0) toast.info(`Caixa fechado. Houve sobra de R$ ${diferenca.toFixed(2)}.`);
+      else toast.error(`Caixa fechado com QUEBRA (falta) de R$ ${Math.abs(diferenca).toFixed(2)}.`);
+      buscarHistoricoCaixa();
+    }
+  };
 
   const realizarLogin = async (e) => {
     e.preventDefault();
-    
-
-    const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
-      email: inputUser,
-      password: inputPass,
-    });
-
-    if (authError || !authData.user) {
-      return toast.error("Credenciais inválidas. Verifique seu email e senha.");
-    }
-
-    
-    const { data: userData, error: userError } = await supabase
-      .from('usuarios')
-      .select('nome, role')
-      .eq('id', authData.user.id)
-      .single();
-
-    if (userError || !userData) {
-      return toast.error("Perfil de usuário não encontrado no sistema.");
-    }
-
-    setUsuarioRole(userData.role);
-    setUsuarioAtual(userData.nome);
-    setIsLoggedIn(true);
-    toast.success(`Bem-vindo(a), ${userData.nome}!`);
+    const { data, error } = await supabase.from('usuarios').select('*').eq('login', inputUser).eq('senha', inputPass).single();
+    if (data) { setUsuarioRole(data.role); setUsuarioAtual(data.nome); setIsLoggedIn(true); toast.success(`Bem-vindo(a), ${data.nome}!`); } else { toast.error("Credenciais invalidas."); }
   };
 
-  const realizarLogoff = () => { setIsLoggedIn(false); setInputUser(''); setInputPass(''); setTelaAtiva('inicio'); setUsuarioRole(''); };
+  const realizarLogoff = () => { setIsLoggedIn(false); setInputUser(''); setInputPass(''); setTelaAtiva('inicio'); setUsuarioRole(''); setCaixaAtivo(null); };
 
-  const TelaBloqueada = () => (
-    <div className="tela-bloqueada">
-      <h2 className="titulo-escuro">Acesso Restrito</h2>
-      <p className="texto-cinza">O seu nivel de usuario ({usuarioRole}) nao tem permissao para visualizar esta tela.</p>
-    </div>
-  );
-
+  const TelaBloqueada = () => (<div className="tela-bloqueada"><h2 className="titulo-escuro">Acesso Restrito</h2><p className="texto-cinza">O seu nivel de usuario ({usuarioRole}) nao tem permissao para visualizar esta tela.</p></div>);
   const maskCNPJ = (value) => value.replace(/\D/g, '').replace(/^(\d{2})(\d)/, '$1.$2').replace(/^(\d{2})\.(\d{3})(\d)/, '$1.$2.$3').replace(/\.(\d{3})(\d)/, '.$1/$2').replace(/(\d{4})(\d)/, '$1-$2').slice(0, 18);
   const maskCPF = (value) => value.replace(/\D/g, '').replace(/(\d{3})(\d)/, '$1.$2').replace(/(\d{3})(\d)/, '$1.$2').replace(/(\d{3})(\d{1,2})$/, '$1-$2').slice(0, 14);
   const maskTelefone = (value) => value.replace(/\D/g, '').replace(/^(\d{2})(\d)/g, '($1) $2').replace(/(\d)(\d{4})$/, '$1-$2').slice(0, 15);
   const manipularUpload = (e) => { if (e.target.files[0]) setImagemAnexada(URL.createObjectURL(e.target.files[0])); };
-
   const adicionarLinha = () => setLinhasItens([...linhasItens, { id: Date.now(), qtd: 0, valor: 0, vlrA: 0, vlrB: 0, vlrC: 0 }]);
   const removerLinha = (id) => { if (linhasItens.length > 1 && window.confirm("Confirmar remocao do item?")) setLinhasItens(linhasItens.filter(l => l.id !== id)); };
   const atualizarValorLinha = (id, campo, valor) => setLinhasItens(linhasItens.map(linha => linha.id === id ? { ...linha, [campo]: (campo === 'qtd' || campo === 'valor' || campo === 'vlrA' || campo === 'vlrB' || campo === 'vlrC') ? Number(valor) : valor } : linha));
 
   const confirmarEntradaComPendencia = async () => {
     const subtotal = linhasItens.reduce((acc, item) => acc + (Number(item.qtd || 0) * Number(item.valor || 0)), 0);
-    const fornNF = document.getElementById('forn-entrada')?.value || 'Nao informado';
-    const cnpjNF = document.getElementById('cnpj-entrada')?.value || '';
-    const dataNF = document.getElementById('data-entrada')?.value || new Date().toISOString().split('T')[0];
-
+    const fornNF = document.getElementById('forn-entrada')?.value || 'Nao informado'; const cnpjNF = document.getElementById('cnpj-entrada')?.value || ''; const dataNF = document.getElementById('data-entrada')?.value || new Date().toISOString().split('T')[0];
     if (subtotal > 0) { await supabase.from('despesas').insert([{ descricao: `Entrada Mercadoria - NF: ${cnpjNF || 'S/N'}`, fornecedor: fornNF, valor_total: subtotal, tipo: 'COMPRA_ESTOQUE' }]); buscarDespesasReal(); }
     if (fornNF !== 'Nao informado' || cnpjNF || subtotal > 0) { await supabase.from('notas_fiscais').insert([{ fornecedor: fornNF, cnpj: cnpjNF, data_emissao: dataNF, valor_total: subtotal }]); buscarNotasReal(); }
-    if (linhasItens.length > 0 && linhasItens[0].nome_temp) {
-      const novosPendentes = linhasItens.map(l => ({ nome: l.nome_temp || 'Sem nome', quantidade: Number(l.qtd || 0), custo_unitario: Number(l.valor || 0), fornecedor: fornNF }));
-      await supabase.from('itens_pendentes').insert(novosPendentes); buscarPendenciasReal();
-    }
+    if (linhasItens.length > 0 && linhasItens[0].nome_temp) { const novosPendentes = linhasItens.map(l => ({ nome: l.nome_temp || 'Sem nome', quantidade: Number(l.qtd || 0), custo_unitario: Number(l.valor || 0), fornecedor: fornNF })); await supabase.from('itens_pendentes').insert(novosPendentes); buscarPendenciasReal(); }
     setValorTotalEntradas(prev => prev + subtotal); toast.success("Entrada registrada com sucesso!"); setLinhasItens([{ id: Date.now(), qtd: 0, valor: 0, vlrA: 0, vlrB: 0, vlrC: 0 }]); setImagemAnexada(null);
   };
 
@@ -171,385 +203,435 @@ function App() {
     if (processados > 0) { toast.success(`Baixa registrada.`); buscarEstoqueReal(); buscarLogReal(); setLinhasItens([{ id: Date.now(), qtd: 0, valor: 0, vlrA: 0, vlrB: 0, vlrC: 0 }]); }
   };
 
-  const prepararAceite = (item) => {
-    document.getElementById('nome-item').value = item.nome; document.getElementById('qtd-item').value = item.quantidade; document.getElementById('sku-item').value = ''; setItemEmEdicao(item); toast.info("Preencha o SKU e Categoria.");
-  };
+  const prepararAceite = (item) => { document.getElementById('nome-item').value = item.nome; document.getElementById('qtd-item').value = item.quantidade; document.getElementById('sku-item').value = ''; setItemEmEdicao(item); toast.info("Preencha o SKU e Categoria."); };
+  const cancelarPendencia = async (id) => { if (window.confirm("Confirmar exclusao?")) { await supabase.from('itens_pendentes').delete().eq('id', id); buscarPendenciasReal(); if (itemEmEdicao?.id === id) setItemEmEdicao(null); toast.info("Item descartado."); } };
 
-  const cancelarPendencia = async (id) => {
-    if (window.confirm("Confirmar exclusao?")) { await supabase.from('itens_pendentes').delete().eq('id', id); buscarPendenciasReal(); if (itemEmEdicao?.id === id) setItemEmEdicao(null); toast.info("Item descartado."); }
-  };
-
+  // ==========================================
+  // NOVA LOGICA DE UPLOAD DE IMAGEM NO CADASTRO
+  // ==========================================
   const salvarCadastroItem = async () => {
-    const nome = document.getElementById('nome-item').value; const categoria = document.getElementById('categoria-item').value; const qtd = Number(document.getElementById('qtd-item').value); const sku = document.getElementById('sku-item').value;
+    const nome = document.getElementById('nome-item').value;
+    const categoria = document.getElementById('categoria-item').value;
+    const qtd = Number(document.getElementById('qtd-item').value);
+    const sku = document.getElementById('sku-item').value;
+    const codigo_barra = document.getElementById('codigo-barra-item')?.value || '';
+    const ncm = document.getElementById('ncm-item')?.value || '';
+    const cest = document.getElementById('cest-item')?.value || '';
+    const origem = document.getElementById('origem-item')?.value || '0';
+    const ipi = Number(document.getElementById('ipi-item')?.value || 0);
+
+    // Pega o arquivo do input
+    const inputArquivo = document.getElementById('imagem-produto-upload');
+    const arquivoImagem = inputArquivo ? inputArquivo.files[0] : null;
+
     if (!nome || !sku || !categoria) return toast.error("Nome, Categoria e SKU obrigatorios.");
-    const novoItemBD = { sku, nome, categoria, quantidade: qtd, estoque_minimo: Number(document.getElementById('minimo-item').value), fornecedor_padrao: document.getElementById('fornecedor-item')?.value || '', custo_base: Number(document.getElementById('custo-item')?.value || 0), valor_venda: Number(document.getElementById('venda-item')?.value || 0), status: 'ativo' };
+
+    let url_imagem = null;
+
+    if (arquivoImagem) {
+      toast.info("Imagem detectada! Iniciando upload...");
+      const fileExt = arquivoImagem.name.split('.').pop();
+      const fileName = `prod_${Date.now()}.${fileExt}`;
+
+      const { error: uploadError } = await supabase.storage.from('produtos').upload(fileName, arquivoImagem);
+
+      if (uploadError) {
+        console.error("Erro do Supabase:", uploadError);
+        return toast.error("Erro no Storage: " + uploadError.message);
+      }
+
+      const { data: publicUrlData } = supabase.storage.from('produtos').getPublicUrl(fileName);
+      url_imagem = publicUrlData.publicUrl;
+      toast.success("Foto salva na nuvem com sucesso!");
+    } else {
+      toast.warn("Nenhuma foto selecionada. Salvando sem imagem.");
+    }
+
+    // Salvando no banco de dados
+    const novoItemBD = {
+      sku, nome, categoria, quantidade: qtd,
+      estoque_minimo: Number(document.getElementById('minimo-item').value),
+      fornecedor_padrao: document.getElementById('fornecedor-item')?.value || '',
+      custo_base: Number(document.getElementById('custo-item')?.value || 0),
+      valor_venda: Number(document.getElementById('venda-item')?.value || 0),
+      status: 'ativo', codigo_barra, ncm, cest, origem, ipi,
+      url_imagem // Link que acabamos de gerar
+    };
+
     const { data, error } = await supabase.from('estoque').insert([novoItemBD]).select();
-    if (error) return toast.error("Erro: " + error.message);
+
+    if (error) return toast.error("Erro ao salvar no banco: " + error.message);
+
     await supabase.from('log_movimentacao').insert([{ produto_id: data[0].id, produto_nome: nome, tipo_movimentacao: 'CADASTRO_INICIAL', quantidade_alterada: qtd, usuario: usuarioAtual }]);
-    buscarLogReal(); if (itemEmEdicao) { await supabase.from('itens_pendentes').delete().eq('id', itemEmEdicao.id); buscarPendenciasReal(); setItemEmEdicao(null); }
-    setEstoque([...estoque, data[0]]); toast.success("Item salvo com sucesso.");
-    document.getElementById('nome-item').value = ''; document.getElementById('categoria-item').value = ''; document.getElementById('qtd-item').value = ''; document.getElementById('sku-item').value = ''; document.getElementById('fornecedor-item').value = ''; document.getElementById('custo-item').value = ''; document.getElementById('venda-item').value = '';
+    buscarLogReal();
+
+    if (itemEmEdicao) {
+      await supabase.from('itens_pendentes').delete().eq('id', itemEmEdicao.id);
+      buscarPendenciasReal(); setItemEmEdicao(null);
+    }
+
+    setEstoque([...estoque, data[0]]);
+    toast.success("Item cadastrado com sucesso!");
+
+    // Limpando o formulário
+    document.getElementById('nome-item').value = ''; document.getElementById('sku-item').value = ''; document.getElementById('categoria-item').value = ''; document.getElementById('codigo-barra-item').value = ''; document.getElementById('ncm-item').value = ''; document.getElementById('cest-item').value = ''; document.getElementById('origem-item').value = '0'; document.getElementById('ipi-item').value = '0'; document.getElementById('qtd-item').value = '0'; document.getElementById('minimo-item').value = '5'; document.getElementById('fornecedor-item').value = ''; document.getElementById('custo-item').value = ''; document.getElementById('venda-item').value = '';
+    if (inputArquivo) inputArquivo.value = '';
+  };
+
+  const gerarReciboVendaDiretaPDF = (carrinho, cliente, numeroVenda, total) => {
+    const img = new Image(); img.src = logoAtlas;
+    img.onload = () => {
+      const doc = new jsPDF();
+      doc.setFontSize(22); doc.setFont("helvetica", "bold"); doc.setTextColor(0, 0, 0); doc.text("ATLAS", 14, 20);
+      const espacoAtlas = doc.getTextWidth("ATLAS "); doc.setTextColor(156, 163, 175); doc.text("ERP", 14 + espacoAtlas, 20);
+      doc.setFontSize(9); doc.setTextColor(100, 116, 139); doc.setFont("helvetica", "normal");
+      doc.text(`CNPJ: 00.000.000/0001-00 | Inscricao Estadual: 123.456.789.000`, 14, 26);
+      doc.text(`Endereco: Avenida da Inovacao, 1000 - Sao Paulo, SP`, 14, 31);
+      doc.text(`Contato: (11) 4000-0000 | atendimento@atlas-erp.com.br`, 14, 36);
+      doc.setDrawColor(226, 232, 240); doc.line(14, 42, 196, 42);
+      doc.setFontSize(14); doc.setTextColor(0, 0, 0); doc.setFont("helvetica", "bold");
+      doc.text(`RECIBO DE VENDA - DOCUMENTO AUXILIAR`, 14, 52);
+      doc.setFontSize(10); doc.setTextColor(71, 85, 105); doc.setFont("helvetica", "normal");
+      doc.text(`Numero da Venda: VD-${String(numeroVenda).padStart(4, '0')}`, 14, 58);
+      doc.text(`Data de Emissao: ${new Date().toLocaleString('pt-BR')}`, 14, 63);
+      doc.setFillColor(248, 250, 252); doc.rect(14, 68, 182, 15, 'F');
+      doc.setFontSize(11); doc.setTextColor(0, 0, 0); doc.setFont("helvetica", "bold");
+      doc.text(`DADOS DO COMPRADOR`, 18, 75);
+      doc.setFontSize(10); doc.setTextColor(71, 85, 105); doc.setFont("helvetica", "normal");
+      doc.text(`Cliente: ${cliente}`, 18, 80);
+      const linhas = carrinho.map(item => [item.nome, `${item.quantidade} un`, `R$ ${item.valor_venda.toFixed(2)}`, `R$ ${item.subtotal.toFixed(2)}`]);
+      autoTable(doc, { startY: 90, head: [['Descricao do Item', 'Qtd', 'Valor Unitario', 'Subtotal']], body: linhas, theme: 'grid', headStyles: { fillColor: [0, 0, 0], fontSize: 10 }, bodyStyles: { fontSize: 11, fontStyle: 'bold' }, didDrawPage: function (data) { doc.setGState(new doc.GState({ opacity: 0.05 })); doc.addImage(img, 'PNG', 35, 110, 140, 120); doc.setGState(new doc.GState({ opacity: 1 })); } });
+      const finalY = doc.lastAutoTable.finalY; doc.setFontSize(16); doc.setTextColor(0, 0, 0); doc.setFont("helvetica", "bold"); doc.text(`TOTAL PAGO: R$ ${total.toFixed(2)}`, 14, finalY + 15);
+      doc.setFontSize(9); doc.setTextColor(148, 163, 184); doc.setFont("helvetica", "normal"); doc.text(`* Trocas ou devolucoes serao aceitas mediante apresentacao deste recibo e do numero da venda.`, 14, finalY + 25);
+      doc.save(`Recibo_Venda_VD${String(numeroVenda).padStart(4, '0')}.pdf`);
+    };
+  };
+
+  const registrarVenda = async (carrinho, clienteCompleto, imprimirRecibo = false) => {
+    let valorTotalVenda = 0; let clienteNome = clienteCompleto.split(' | ')[0]; let novoEstoque = [...estoque];
+    const ultimoNumero = historicoVendas.length > 0 ? Math.max(...historicoVendas.map(v => v.numero_venda || 0)) : 0;
+    const numeroDestaVenda = ultimoNumero + 1;
+    for (const item of carrinho) {
+      valorTotalVenda += item.subtotal;
+      await supabase.from('vendas').insert([{ numero_venda: numeroDestaVenda, produto_id: item.id, produto_nome: item.nome, quantidade: item.quantidade, valor_unitario: item.valor_venda, valor_total: item.subtotal, cliente: clienteCompleto }]);
+      const produtoIndex = novoEstoque.findIndex(i => i.id === item.id);
+      if (produtoIndex !== -1) { const novaQtd = Number(novoEstoque[produtoIndex].quantidade) - Number(item.quantidade); novoEstoque[produtoIndex] = { ...novoEstoque[produtoIndex], quantidade: novaQtd }; await supabase.from('estoque').update({ quantidade: novaQtd }).eq('id', item.id); }
+      await supabase.from('log_movimentacao').insert([{ produto_id: item.id, produto_nome: item.nome, tipo_movimentacao: 'VENDA', quantidade_alterada: -item.quantidade, usuario: usuarioAtual, observacao: `Venda #${numeroDestaVenda} para: ${clienteNome}` }]);
+    }
+    setEstoque(novoEstoque); buscarLogReal(); buscarVendasReal(); toast.success(`Cupom #${numeroDestaVenda} finalizado! Total: R$ ${valorTotalVenda.toFixed(2)}`);
+    if (imprimirRecibo) { gerarReciboVendaDiretaPDF(carrinho, clienteCompleto, numeroDestaVenda, valorTotalVenda); }
   };
 
   const realizarAjusteEstoque = async () => {
     const idItem = document.getElementById('sel-ajuste').value; const qtdAjuste = Number(document.getElementById('qtd-ajuste').value);
-    if (!idItem || !qtdAjuste) return toast.error("Preencha os campos.");
-    const itemAtual = estoque.find(i => i.id === idItem);
+    if (!idItem || !qtdAjuste) return toast.error("Preencha todos os campos antes de ajustar.");
+    const itemAtual = estoque.find(i => i.id === idItem); if (!itemAtual) return toast.error("Produto nao encontrado no estoque.");
     const novaQuantidade = document.getElementById('tipo-ajuste').value === 'entrada' ? Number(itemAtual.quantidade) + qtdAjuste : Number(itemAtual.quantidade) - qtdAjuste;
     await supabase.from('estoque').update({ quantidade: novaQuantidade }).eq('id', idItem);
     await supabase.from('log_movimentacao').insert([{ produto_id: idItem, produto_nome: itemAtual.nome, tipo_movimentacao: 'AJUSTE', quantidade_alterada: document.getElementById('tipo-ajuste').value === 'entrada' ? qtdAjuste : -qtdAjuste, usuario: usuarioAtual, observacao: 'Ajuste manual' }]);
-    buscarLogReal(); setEstoque(estoque.map(i => i.id === idItem ? { ...i, quantidade: novaQuantidade } : i)); toast.success("Ajuste realizado."); document.getElementById('qtd-ajuste').value = '';
+    buscarLogReal(); setEstoque(estoque.map(i => i.id === idItem ? { ...i, quantidade: novaQuantidade } : i)); toast.success("Ajuste realizado com sucesso."); document.getElementById('qtd-ajuste').value = '';
   };
 
-  const registrarVenda = async (carrinho, clienteCompleto) => {
-    let valorTotalVenda = 0;
-    let clienteNome = clienteCompleto.split(' | ')[0];
-    let novoEstoque = [...estoque];
-
-    for (const item of carrinho) {
-      valorTotalVenda += item.subtotal;
-
-      await supabase.from('vendas').insert([{ produto_id: item.id, produto_nome: item.nome, quantidade: item.quantidade, valor_unitario: item.valor_venda, valor_total: item.subtotal, cliente: clienteCompleto }]);
-
-      const produtoIndex = novoEstoque.findIndex(i => i.id === item.id);
-      if (produtoIndex !== -1) {
-        const novaQtd = Number(novoEstoque[produtoIndex].quantidade) - Number(item.quantidade);
-        novoEstoque[produtoIndex] = { ...novoEstoque[produtoIndex], quantidade: novaQtd };
-        await supabase.from('estoque').update({ quantidade: novaQtd }).eq('id', item.id);
-      }
-
-      await supabase.from('log_movimentacao').insert([{ produto_id: item.id, produto_nome: item.nome, tipo_movimentacao: 'VENDA', quantidade_alterada: -item.quantidade, usuario: usuarioAtual, observacao: `Venda para: ${clienteNome}` }]);
-    }
-
-    setEstoque(novoEstoque);
-    buscarLogReal(); buscarVendasReal();
-    toast.success(`Cupom finalizado! R$ ${valorTotalVenda.toFixed(2)}`);
-  };
-
-  const registrarDevolucao = async (carrinho, cliente, motivo) => {
-    let valorTotalEstornado = 0;
-    let novoEstoque = [...estoque];
-
+  const registrarDevolucao = async (carrinho, cliente, motivo, numeroVendaRef, dataVendaRef) => {
+    let valorTotalEstornado = 0; let novoEstoque = [...estoque];
     for (const item of carrinho) {
       valorTotalEstornado += item.subtotal;
-
-      await supabase.from('devolucoes').insert([{ produto_id: item.id, produto_nome: item.nome, quantidade: item.quantidade, valor_estornado: item.subtotal, cliente: cliente, motivo: motivo }]);
-
+      await supabase.from('devolucoes').insert([{ produto_id: item.id, produto_nome: item.nome, quantidade: item.quantidade, valor_estornado: item.subtotal, cliente: cliente, motivo: motivo, numero_venda_ref: Number(numeroVendaRef), data_venda: dataVendaRef }]);
       const produtoIndex = novoEstoque.findIndex(i => i.id === item.id);
-      if (produtoIndex !== -1) {
-        const novaQtd = Number(novoEstoque[produtoIndex].quantidade) + Number(item.quantidade);
-        novoEstoque[produtoIndex] = { ...novoEstoque[produtoIndex], quantidade: novaQtd };
-        await supabase.from('estoque').update({ quantidade: novaQtd }).eq('id', item.id);
-      }
-
-      await supabase.from('log_movimentacao').insert([{ produto_id: item.id, produto_nome: item.nome, tipo_movimentacao: 'DEVOLUCAO', quantidade_alterada: item.quantidade, usuario: usuarioAtual, observacao: `Motivo: ${motivo}` }]);
+      if (produtoIndex !== -1) { const novaQtd = Number(novoEstoque[produtoIndex].quantidade) + Number(item.quantidade); novoEstoque[produtoIndex] = { ...novoEstoque[produtoIndex], quantidade: novaQtd }; await supabase.from('estoque').update({ quantidade: novaQtd }).eq('id', item.id); }
+      await supabase.from('log_movimentacao').insert([{ produto_id: item.id, produto_nome: item.nome, tipo_movimentacao: 'DEVOLUCAO', quantidade_alterada: item.quantidade, usuario: usuarioAtual, observacao: `Motivo: ${motivo} (Ref: VD-${numeroVendaRef})` }]);
     }
-
-    if (valorTotalEstornado > 0) {
-      await supabase.from('despesas').insert([{ descricao: `Estorno de Itens`, fornecedor: 'Interno', valor_total: valorTotalEstornado, tipo: 'ESTORNO_VENDA' }]);
-    }
-
-    setEstoque(novoEstoque);
-    buscarLogReal(); buscarDespesasReal(); buscarDevolucoesReal();
-    toast.success(`Estorno processado com sucesso.`);
+    if (valorTotalEstornado > 0) { await supabase.from('despesas').insert([{ descricao: `Estorno - Venda VD-${numeroVendaRef}`, fornecedor: 'Interno', valor_total: valorTotalEstornado, tipo: 'ESTORNO_VENDA' }]); }
+    setEstoque(novoEstoque); buscarLogReal(); buscarDespesasReal(); buscarDevolucoesReal(); toast.success(`Estorno processado com sucesso.`);
   };
 
-  const gerarReciboDevolucaoPDF = (carrinho, cliente, motivo, total) => {
+  const gerarReciboDevolucaoPDF = (carrinho, cliente, motivo, numeroVendaRef, dataVendaRef, total) => {
     const img = new Image(); img.src = logoAtlas;
     img.onload = () => {
       const doc = new jsPDF();
-      doc.setFontSize(22); doc.setFont("helvetica", "bold");
-      doc.setTextColor(0, 0, 0); doc.text("ATLAS", 14, 20);
-      const espacoAtlas = doc.getTextWidth("ATLAS ");
-      doc.setTextColor(156, 163, 175); doc.text("ERP", 14 + espacoAtlas, 20);
-
+      doc.setFontSize(22); doc.setFont("helvetica", "bold"); doc.setTextColor(0, 0, 0); doc.text("ATLAS", 14, 20);
+      const espacoAtlas = doc.getTextWidth("ATLAS "); doc.setTextColor(156, 163, 175); doc.text("ERP", 14 + espacoAtlas, 20);
       doc.setFontSize(9); doc.setTextColor(100, 116, 139); doc.setFont("helvetica", "normal");
       doc.text(`CNPJ: 00.000.000/0001-00 | Inscricao Estadual: 123.456.789.000`, 14, 26);
       doc.text(`Endereco: Avenida da Inovacao, 1000 - Sao Paulo, SP`, 14, 31);
       doc.text(`Contato: (11) 4000-0000 | atendimento@atlas-erp.com.br`, 14, 36);
       doc.setDrawColor(226, 232, 240); doc.line(14, 42, 196, 42);
-
       doc.setFontSize(14); doc.setTextColor(0, 0, 0); doc.setFont("helvetica", "bold");
       doc.text(`COMPROVANTE DE DEVOLUCAO E ESTORNO`, 14, 52);
-
       doc.setFontSize(10); doc.setTextColor(71, 85, 105); doc.setFont("helvetica", "normal");
-      doc.text(`Data da Operacao: ${new Date().toLocaleString('pt-BR')}`, 14, 58);
-      doc.text(`Motivo Registrado: ${motivo}`, 14, 63);
-
-      doc.setFillColor(248, 250, 252); doc.rect(14, 68, 182, 15, 'F');
+      doc.text(`Data do Retorno: ${new Date().toLocaleString('pt-BR')}`, 14, 58);
+      doc.text(`Ref. Venda Original: VD-${String(numeroVendaRef).padStart(4, '0')} (Em: ${dataVendaRef})`, 14, 63);
+      doc.text(`Motivo Registrado: ${motivo}`, 14, 68);
+      doc.setFillColor(248, 250, 252); doc.rect(14, 73, 182, 15, 'F');
       doc.setFontSize(11); doc.setTextColor(0, 0, 0); doc.setFont("helvetica", "bold");
-      doc.text(`DADOS DO CLIENTE`, 18, 75);
+      doc.text(`DADOS DO CLIENTE`, 18, 80);
       doc.setFontSize(10); doc.setTextColor(71, 85, 105); doc.setFont("helvetica", "normal");
-      doc.text(`Nome/Razao Social: ${cliente}`, 18, 80);
-
+      doc.text(`Nome/Razao Social: ${cliente}`, 18, 85);
       const linhas = carrinho.map(item => [item.nome, `${item.quantidade} un`, `R$ ${item.valor_venda.toFixed(2)}`, `R$ ${item.subtotal.toFixed(2)}`]);
-
-      autoTable(doc, {
-        startY: 90, head: [['Item Retornado', 'Qtd', 'Valor Unitario', 'Total Estornado']],
-        body: linhas,
-        theme: 'grid', headStyles: { fillColor: [0, 0, 0], fontSize: 10 }, bodyStyles: { fontSize: 11, fontStyle: 'bold' },
-        didDrawPage: function (data) { doc.setGState(new doc.GState({ opacity: 0.05 })); doc.addImage(img, 'PNG', 35, 110, 140, 120); doc.setGState(new doc.GState({ opacity: 1 })); }
-      });
-
-      const finalY = doc.lastAutoTable.finalY;
-      doc.setFontSize(16); doc.setTextColor(0, 0, 0); doc.setFont("helvetica", "bold");
-      doc.text(`TOTAL ESTORNADO: R$ ${total.toFixed(2)}`, 14, finalY + 15);
-
-      const alturaPagina = doc.internal.pageSize.getHeight();
-      doc.setFontSize(11); doc.setTextColor(0, 0, 0); doc.setFont("helvetica", "italic");
-      doc.text(`Operacao registrada no sistema Atlas ERP.`, doc.internal.pageSize.getWidth() / 2, alturaPagina - 15, { align: "center" });
-
-      doc.save(`Devolucao_${Date.now()}.pdf`);
+      autoTable(doc, { startY: 95, head: [['Item Retornado', 'Qtd', 'Valor Unitario', 'Total Estornado']], body: linhas, theme: 'grid', headStyles: { fillColor: [0, 0, 0], fontSize: 10 }, bodyStyles: { fontSize: 11, fontStyle: 'bold' }, didDrawPage: function (data) { doc.setGState(new doc.GState({ opacity: 0.05 })); doc.addImage(img, 'PNG', 35, 110, 140, 120); doc.setGState(new doc.GState({ opacity: 1 })); } });
+      const finalY = doc.lastAutoTable.finalY; doc.setFontSize(16); doc.setTextColor(0, 0, 0); doc.setFont("helvetica", "bold"); doc.text(`TOTAL ESTORNADO: R$ ${total.toFixed(2)}`, 14, finalY + 15);
+      doc.save(`Devolucao_VD${numeroVendaRef}_${Date.now()}.pdf`);
     };
   };
 
-  const registrarRequisicaoInterna = async (e) => {
-    e.preventDefault();
-    const tipo = document.getElementById('req-tipo').value; const justificativa = document.getElementById('req-justificativa').value;
-    if (!tipo || !justificativa) return toast.error("Tipo e Justificativa sao obrigatorios.");
-    const protocolo = `REQ-${Math.floor(1000 + Math.random() * 9000)}`;
-    await supabase.from('requisicoes_internas').insert([{ protocolo, requisitante: usuarioAtual, tipo, justificativa, status: 'Pendente' }]);
-    toast.success(`Requisicao ${protocolo} enviada.`); buscarRequisicoesReal(); document.getElementById('req-justificativa').value = ''; setTelaAtiva('painel-de-requisicoes');
-  };
-
-  const atualizarStatusRequisicao = async (id, novoStatus) => {
-    await supabase.from('requisicoes_internas').update({ status: novoStatus }).eq('id', id); buscarRequisicoesReal(); toast.success(`Status da Requisicao: ${novoStatus}`);
-  };
-
-  const salvarFornecedor = async () => {
-    const razao = document.getElementById('razao-forn').value; const cnpj = document.getElementById('cnpj-forn').value;
-    if (!razao || !cnpj) return toast.error("Razao Social e CNPJ obrigatorios.");
-    const { data } = await supabase.from('fornecedores').insert([{ razao, cnpj, email: document.getElementById('email-forn').value, telefone: document.getElementById('telefone-forn')?.value || '', status: 'Ativo' }]).select();
-    setListaFornecedores([...listaFornecedores, data[0]]); toast.success("Fornecedor cadastrado."); setTelaAtiva('fornecedores');
-  };
-
-  const gerarSolicitacaoCompra = async (item) => {
-    const qtdSolicitada = prompt(`Informe a quantidade para cotacao: ${item.nome}`, "1");
-    if (qtdSolicitada && !isNaN(qtdSolicitada)) { await supabase.from('cotacoes').insert([{ produto: item.nome, qtd: Number(qtdSolicitada), fornBase: item.fornecedor_padrao || '', vlrA: item.custo_base || 0, vlrB: 0, vlrC: 0 }]); buscarCotacoesReal(); toast.info(`Enviado para Painel de Cotacoes.`); }
-  };
-
-  const atualizarCotacaoState = (id, campo, valor) => { setSolicitacoesCotacao(solicitacoesCotacao.map(cot => cot.id === id ? { ...cot, [campo]: campo === 'fornBase' ? valor : Number(valor) } : cot)); };
-  const salvarCotacaoBD = async (cotacao) => { await supabase.from('cotacoes').update({ fornBase: cotacao.fornBase, vlrA: cotacao.vlrA, vlrB: cotacao.vlrB, vlrC: cotacao.vlrC }).eq('id', cotacao.id); };
-
-  const converterCotacaoEmPedido = async (cotacao) => {
-    const valores = [{ forn: cotacao.fornBase || 'Base', vlr: cotacao.vlrA }, { forn: 'Opcao B', vlr: cotacao.vlrB }, { forn: 'Opcao C', vlr: cotacao.vlrC }].filter(v => v.vlr > 0);
-    if (valores.length === 0) return toast.error("Registre um valor financeiro.");
-    const vencedor = valores.reduce((prev, curr) => (curr.vlr < prev.vlr ? curr : prev));
-    await supabase.from('pedidos_compra').insert([{ protocolo: `PED-${Math.floor(1000 + Math.random() * 9000)}`, fornecedor: vencedor.forn, produto: cotacao.produto || cotacao.nome_temp, qtd: cotacao.qtd, unitario: vencedor.vlr, subtotal: cotacao.qtd * vencedor.vlr, data: new Date().toISOString().split('T')[0] }]);
-    if (!cotacao.isManual) { await supabase.from('cotacoes').delete().eq('id', cotacao.id); buscarCotacoesReal(); } buscarPedidosReal(); toast.success(`Pedido de compra aprovado.`); setTelaAtiva('pedidos');
-  };
-
   const emitirNfeSaida = (e) => {
-    e.preventDefault();
-    const vendaId = document.getElementById('nf-venda-ref').value;
-    if (!vendaId) return toast.error("Selecione uma venda na lista para gerar o recibo.");
-
-    const vendaRef = historicoVendas.find(v => v.id === vendaId);
-
+    e.preventDefault(); const vendaId = document.getElementById('nf-venda-ref').value; if (!vendaId) return toast.error("Selecione uma venda na lista para gerar o recibo."); const vendaRef = historicoVendas.find(v => v.id === vendaId);
+    if (!vendaRef) return toast.error("Venda nao encontrada no historico.");
     try {
-      const img = new Image();
-      img.src = logoAtlas;
-      img.onload = () => {
-        const doc = new jsPDF();
-
-        doc.setFontSize(22); doc.setFont("helvetica", "bold");
-        doc.setTextColor(0, 0, 0); doc.text("ATLAS", 14, 20);
-        const espacoAtlas = doc.getTextWidth("ATLAS ");
-        doc.setTextColor(156, 163, 175); doc.text("ERP", 14 + espacoAtlas, 20);
-
-        doc.setFontSize(9); doc.setTextColor(100, 116, 139); doc.setFont("helvetica", "normal");
-        doc.text(`CNPJ: 00.000.000/0001-00 | Inscricao Estadual: 123.456.789.000`, 14, 26);
-        doc.text(`Endereco: Avenida da Inovacao, 1000 - Sao Paulo, SP`, 14, 31);
-        doc.text(`Contato: (11) 4000-0000 | atendimento@atlas-erp.com.br`, 14, 36);
-
-        doc.setDrawColor(226, 232, 240); doc.line(14, 42, 196, 42);
-
-        doc.setFontSize(14); doc.setTextColor(0, 0, 0); doc.setFont("helvetica", "bold");
-        doc.text(`RECIBO DE COMPRA - COMPROVANTE DE PAGAMENTO`, 14, 52);
-
-        doc.setFontSize(10); doc.setTextColor(71, 85, 105); doc.setFont("helvetica", "normal");
-        doc.text(`Protocolo da Operacao: ${vendaRef.id.toUpperCase()}`, 14, 58);
-        doc.text(`Data de Emissao: ${new Date(vendaRef.created_at).toLocaleString('pt-BR')}`, 14, 63);
-
-        doc.setFillColor(248, 250, 252); doc.rect(14, 68, 182, 25, 'F');
-        doc.setFontSize(11); doc.setTextColor(0, 0, 0); doc.setFont("helvetica", "bold");
-        doc.text(`DADOS DO COMPRADOR`, 18, 75);
-
-        const dadosCliente = vendaRef.cliente.split('|');
-        doc.setFontSize(10); doc.setTextColor(71, 85, 105); doc.setFont("helvetica", "normal");
-        doc.text(`Nome/Razao Social: ${dadosCliente[0]?.trim() || 'Consumidor Final'}`, 18, 81);
-        doc.text(`Doc: ${dadosCliente[1]?.replace('Doc:', '').trim() || 'Nao informado'}`, 18, 87);
-        doc.text(`Telefone: ${dadosCliente[2]?.replace('Tel:', '').trim() || 'Nao informado'}`, 110, 87);
-
-        autoTable(doc, {
-          startY: 100, head: [['Descricao do Item', 'Quantidade', 'Valor Unitario', 'Subtotal']],
-          body: [[vendaRef.produto_nome, `${vendaRef.quantidade} un`, `R$ ${Number(vendaRef.valor_unitario).toFixed(2)}`, `R$ ${Number(vendaRef.valor_total).toFixed(2)}`]],
-          theme: 'grid', headStyles: { fillColor: [0, 0, 0], fontSize: 10 }, bodyStyles: { fontSize: 11, fontStyle: 'bold' },
-          didDrawPage: function (data) { doc.setGState(new doc.GState({ opacity: 0.05 })); doc.addImage(img, 'PNG', 35, 110, 140, 120); doc.setGState(new doc.GState({ opacity: 1 })); }
-        });
-
-        const finalY = doc.lastAutoTable.finalY;
-        doc.setFontSize(16); doc.setTextColor(0, 0, 0); doc.setFont("helvetica", "bold");
-        doc.text(`TOTAL PAGO: R$ ${Number(vendaRef.valor_total).toFixed(2)}`, 14, finalY + 15);
-
-        doc.setFontSize(9); doc.setTextColor(148, 163, 184); doc.setFont("helvetica", "normal");
-        doc.text(`* Este documento tem carater de recibo e controle interno, nao possuindo valor fiscal.`, 14, finalY + 25);
-        doc.text(`* Trocas ou devolucoes serao aceitas em ate 7 dias.`, 14, finalY + 30);
-
-        const alturaPagina = doc.internal.pageSize.getHeight();
-        doc.setFontSize(11); doc.setTextColor(0, 0, 0); doc.setFont("helvetica", "italic");
-        doc.text(`A equipe do Atlas ERP agradece a sua preferencia. Volte sempre!`, doc.internal.pageSize.getWidth() / 2, alturaPagina - 15, { align: "center" });
-
-        doc.save(`Recibo_${vendaRef.produto_nome.substring(0, 6)}_${Date.now()}.pdf`);
-        toast.success("Recibo gerado com sucesso!");
+      const img = new Image(); img.src = logoAtlas; img.onload = () => {
+        const doc = new jsPDF(); doc.setFontSize(22); doc.setFont("helvetica", "bold"); doc.setTextColor(0, 0, 0); doc.text("ATLAS", 14, 20); const espacoAtlas = doc.getTextWidth("ATLAS "); doc.setTextColor(156, 163, 175); doc.text("ERP", 14 + espacoAtlas, 20); doc.setFontSize(9); doc.setTextColor(100, 116, 139); doc.setFont("helvetica", "normal"); doc.text(`CNPJ: 00.000.000/0001-00 | Inscricao Estadual: 123.456.789.000`, 14, 26); doc.text(`Endereco: Avenida da Inovacao, 1000 - Sao Paulo, SP`, 14, 31); doc.text(`Contato: (11) 4000-0000 | atendimento@atlas-erp.com.br`, 14, 36); doc.setDrawColor(226, 232, 240); doc.line(14, 42, 196, 42); doc.setFontSize(14); doc.setTextColor(0, 0, 0); doc.setFont("helvetica", "bold"); doc.text(`RECIBO DE VENDA - DOCUMENTO AUXILIAR`, 14, 52); doc.setFontSize(10); doc.setTextColor(71, 85, 105); doc.setFont("helvetica", "normal"); doc.text(`Numero da Venda: VD-${String(vendaRef.numero_venda || 0).padStart(4, '0')}`, 14, 58); doc.text(`Data de Emissao: ${new Date(vendaRef.created_at).toLocaleString('pt-BR')}`, 14, 63); doc.setFillColor(248, 250, 252); doc.rect(14, 68, 182, 25, 'F'); doc.setFontSize(11); doc.setTextColor(0, 0, 0); doc.setFont("helvetica", "bold"); doc.text(`DADOS DO COMPRADOR`, 18, 75);
+        const dadosCliente = vendaRef.cliente.split('|'); doc.setFontSize(10); doc.setTextColor(71, 85, 105); doc.setFont("helvetica", "normal"); doc.text(`Nome/Razao Social: ${dadosCliente[0]?.trim() || 'Consumidor Final'}`, 18, 81); doc.text(`Doc: ${dadosCliente[1]?.replace('Doc:', '').trim() || 'Nao informado'}`, 18, 87); doc.text(`Telefone: ${dadosCliente[2]?.replace('Tel:', '').trim() || 'Nao informado'}`, 110, 87);
+        autoTable(doc, { startY: 100, head: [['Descricao do Item', 'Quantidade', 'Valor Unitario', 'Subtotal']], body: [[vendaRef.produto_nome, `${vendaRef.quantidade} un`, `R$ ${Number(vendaRef.valor_unitario).toFixed(2)}`, `R$ ${Number(vendaRef.valor_total).toFixed(2)}`]], theme: 'grid', headStyles: { fillColor: [0, 0, 0], fontSize: 10 }, bodyStyles: { fontSize: 11, fontStyle: 'bold' } });
+        const finalY = doc.lastAutoTable.finalY; doc.setFontSize(16); doc.setTextColor(0, 0, 0); doc.setFont("helvetica", "bold"); doc.text(`TOTAL PAGO: R$ ${Number(vendaRef.valor_total).toFixed(2)}`, 14, finalY + 15); doc.save(`Recibo_VD${String(vendaRef.numero_venda || 0).padStart(4, '0')}.pdf`); toast.success("Recibo gerado com sucesso!");
       };
     } catch (err) { toast.error("Erro ao montar o Recibo."); }
   };
 
-  const gerarRelatorioPDF = (titulo, colunas, linhas) => {
-    const img = new Image(); img.src = logoAtlas;
-    img.onload = () => {
-      const doc = new jsPDF();
+  const registrarRequisicaoInterna = async (e) => { e.preventDefault(); const tipo = document.getElementById('req-tipo').value; const justificativa = document.getElementById('req-justificativa').value; if (!tipo || !justificativa) return toast.error("Tipo e Justificativa sao obrigatorios."); const protocolo = `REQ-${Math.floor(1000 + Math.random() * 9000)}`; await supabase.from('requisicoes_internas').insert([{ protocolo, requisitante: usuarioAtual, tipo, justificativa, status: 'Pendente' }]); toast.success(`Requisicao ${protocolo} enviada.`); buscarRequisicoesReal(); document.getElementById('req-justificativa').value = ''; setTelaAtiva('painel-de-requisicoes'); };
+  const visualizarPDFRequisicao = (req) => { const img = new Image(); img.src = logoAtlas; img.onload = () => { const doc = new jsPDF(); doc.setFontSize(22); doc.setFont("helvetica", "bold"); doc.setTextColor(0, 0, 0); doc.text("ATLAS", 14, 20); const espacoAtlas = doc.getTextWidth("ATLAS "); doc.setTextColor(156, 163, 175); doc.text("ERP", 14 + espacoAtlas, 20); doc.setFontSize(16); doc.setTextColor(0, 0, 0); doc.setFont("helvetica", "bold"); doc.text(`DOCUMENTO DE REQUISICAO INTERNA`, 14, 40); doc.setFontSize(11); doc.setTextColor(71, 85, 105); doc.setFont("helvetica", "normal"); doc.text(`Protocolo: ${req.protocolo}`, 14, 50); doc.text(`Data da Solicitacao: ${new Date(req.created_at).toLocaleString('pt-BR')}`, 14, 57); doc.text(`Funcionario Solicitante: ${req.requisitante}`, 14, 64); doc.text(`Status Atual: ${req.status}`, 14, 71); doc.setFillColor(248, 250, 252); doc.rect(14, 78, 182, 10, 'F'); doc.setFontSize(12); doc.setTextColor(0, 0, 0); doc.setFont("helvetica", "bold"); doc.text(`DETALHES DA SOLICITACAO`, 18, 85); doc.setFontSize(11); doc.setTextColor(0, 0, 0); doc.setFont("helvetica", "bold"); doc.text(`Natureza / Tipo:`, 14, 100); doc.setFont("helvetica", "normal"); doc.text(req.tipo, 14, 107); doc.setFont("helvetica", "bold"); doc.text(`Justificativa / Descricao do Pedido:`, 14, 120); doc.setFont("helvetica", "normal"); const linhasJustificativa = doc.splitTextToSize(req.justificativa, 180); doc.text(linhasJustificativa, 14, 127); doc.setGState(new doc.GState({ opacity: 0.05 })); doc.addImage(img, 'PNG', 35, 100, 140, 120); doc.setGState(new doc.GState({ opacity: 1 })); doc.save(`Requisicao_${req.protocolo}.pdf`); toast.info("Documento PDF baixado."); }; };
+  const atualizarStatusRequisicao = async (id, novoStatus) => { await supabase.from('requisicoes_internas').update({ status: novoStatus }).eq('id', id); buscarRequisicoesReal(); toast.success(`Status da Requisicao: ${novoStatus}`); };
+  const salvarFornecedor = async () => { const razao = document.getElementById('razao-forn').value; const cnpj = document.getElementById('cnpj-forn').value; if (!razao || !cnpj) return toast.error("Razao Social e CNPJ obrigatorios."); const { data } = await supabase.from('fornecedores').insert([{ razao, cnpj, email: document.getElementById('email-forn').value, telefone: document.getElementById('telefone-forn')?.value || '', status: 'Ativo' }]).select(); setListaFornecedores([...listaFornecedores, data[0]]); toast.success("Fornecedor cadastrado."); setTelaAtiva('fornecedores'); };
+  const gerarSolicitacaoCompra = async (item) => { const qtdSolicitada = prompt(`Informe a quantidade para cotacao: ${item.nome}`, "1"); if (qtdSolicitada && !isNaN(qtdSolicitada)) { await supabase.from('cotacoes').insert([{ produto: item.nome, qtd: Number(qtdSolicitada), fornBase: item.fornecedor_padrao || '', vlrA: item.custo_base || 0, vlrB: 0, vlrC: 0 }]); buscarCotacoesReal(); toast.info(`Enviado para Painel de Cotacoes.`); } };
+  const atualizarCotacaoState = (id, campo, valor) => { setSolicitacoesCotacao(solicitacoesCotacao.map(cot => cot.id === id ? { ...cot, [campo]: campo === 'fornBase' ? valor : Number(valor) } : cot)); };
+  const salvarCotacaoBD = async (cotacao) => { await supabase.from('cotacoes').update({ fornBase: cotacao.fornBase, vlrA: cotacao.vlrA, vlrB: cotacao.vlrB, vlrC: cotacao.vlrC }).eq('id', cotacao.id); };
+  const converterCotacaoEmPedido = async (cotacao) => { const valores = [{ forn: cotacao.fornBase || 'Base', vlr: cotacao.vlrA }, { forn: 'Opcao B', vlr: cotacao.vlrB }, { forn: 'Opcao C', vlr: cotacao.vlrC }].filter(v => v.vlr > 0); if (valores.length === 0) return toast.error("Registre um valor financeiro."); const vencedor = valores.reduce((prev, curr) => (curr.vlr < prev.vlr ? curr : prev)); await supabase.from('pedidos_compra').insert([{ protocolo: `PED-${Math.floor(1000 + Math.random() * 9000)}`, fornecedor: vencedor.forn, produto: cotacao.produto || cotacao.nome_temp, qtd: cotacao.qtd, unitario: vencedor.vlr, subtotal: cotacao.qtd * vencedor.vlr, data: new Date().toISOString().split('T')[0] }]); if (!cotacao.isManual) { await supabase.from('cotacoes').delete().eq('id', cotacao.id); buscarCotacoesReal(); } buscarPedidosReal(); toast.success(`Pedido de compra aprovado.`); setTelaAtiva('pedidos'); };
 
-      doc.setFontSize(22); doc.setFont("helvetica", "bold");
-      doc.setTextColor(0, 0, 0); doc.text("ATLAS", 14, 20);
-      const espacoAtlas = doc.getTextWidth("ATLAS ");
-      doc.setTextColor(156, 163, 175); doc.text("ERP", 14 + espacoAtlas, 20);
+  const criarEBaixarExcelEstilizado = async (dados, colunasDef, nomeArquivo, nomePlanilha = "Relatorio") => { try { const workbook = new ExcelJS.Workbook(); const worksheet = workbook.addWorksheet(nomePlanilha); worksheet.columns = colunasDef; dados.forEach(d => worksheet.addRow(d)); worksheet.getRow(1).eachCell((cell) => { cell.font = { bold: true, color: { argb: 'FFFFFFFF' } }; cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0F172A' } }; cell.alignment = { vertical: 'middle', horizontal: 'center' }; }); const buffer = await workbook.xlsx.writeBuffer(); saveAs(new Blob([buffer]), `${nomeArquivo}_${Date.now()}.xlsx`); toast.success(`Planilha Excel baixada!`); } catch (e) { toast.error("Erro ao gerar o Excel."); } };
+  const exportarExcelEstoqueCompleto = () => { const colunas = [{ header: 'Codigo SKU', key: 'sku', width: 15 }, { header: 'Produto (Descricao)', key: 'nome', width: 40 }, { header: 'Categoria', key: 'cat', width: 20 }, { header: 'NCM Fisco', key: 'ncm', width: 15 }, { header: 'Cod. Barras (EAN)', key: 'ean', width: 20 }, { header: 'Saldo Fisico', key: 'qtd', width: 15 }, { header: 'Preco Custo (R$)', key: 'custo', width: 18 }, { header: 'Preco Venda (R$)', key: 'venda', width: 18 }]; const dados = estoque.map(i => ({ sku: i.sku, nome: i.nome, cat: i.categoria || '-', ncm: i.ncm || '-', ean: i.codigo_barra || '-', qtd: i.quantidade, custo: Number(i.custo_base || 0).toFixed(2), venda: Number(i.valor_venda || 0).toFixed(2) })); criarEBaixarExcelEstilizado(dados, colunas, "Atlas_Estoque_Geral", "Produtos"); };
+  const exportarExcelMargemLucro = () => { const colunas = [{ header: 'SKU', key: 'sku', width: 15 }, { header: 'Produto', key: 'nome', width: 40 }, { header: 'Custo Base (R$)', key: 'custo', width: 18 }, { header: 'Venda Final (R$)', key: 'venda', width: 18 }, { header: 'ICMS SP (18%)', key: 'icms', width: 18 }, { header: 'IPI Recolhido', key: 'ipi', width: 18 }, { header: 'Lucro Liquido (R$)', key: 'lucro', width: 20 }, { header: 'Margem (%)', key: 'margem', width: 15 }]; const dados = estoque.filter(i => i.quantidade > 0).map(i => { const venda = Number(i.valor_venda || 0); const custo = Number(i.custo_base || 0); const ipi = Number(i.ipi || 0); const icms = venda * 0.18; const valorIpi = venda * (ipi / 100); const lucroLiquido = venda - custo - icms - valorIpi; const margemPercentual = venda > 0 ? (lucroLiquido / venda) * 100 : 0; return { sku: i.sku, nome: i.nome, custo: custo.toFixed(2), venda: venda.toFixed(2), icms: icms.toFixed(2), ipi: valorIpi.toFixed(2), lucro: lucroLiquido.toFixed(2), margem: margemPercentual.toFixed(2) + '%' }; }); criarEBaixarExcelEstilizado(dados, colunas, "Atlas_Analise_Margem", "Margens Fiscais"); };
+  const exportarExcelEncalhados = () => { if (!dataInicioEncalhado || !dataFimEncalhado) return toast.warn("Selecione a Data Inicial e Final primeiro."); const start = new Date(dataInicioEncalhado).getTime(); const end = new Date(dataFimEncalhado).getTime() + 86400000; const vendasPeriodo = historicoVendas.filter(v => { const tempoVenda = new Date(v.created_at).getTime(); return tempoVenda >= start && tempoVenda <= end; }); const idsVendidos = vendasPeriodo.map(v => v.produto_id); const encalhados = estoque.filter(i => !idsVendidos.includes(i.id) && i.quantidade > 0); if (encalhados.length === 0) return toast.info("Nenhum produto encalhado!"); const colunas = [{ header: 'SKU', key: 'sku', width: 15 }, { header: 'Produto', key: 'nome', width: 40 }, { header: 'Saldo Parado', key: 'qtd', width: 18 }, { header: 'Capital Imobilizado (R$)', key: 'capital', width: 25 }]; const dados = encalhados.map(i => ({ sku: i.sku, nome: i.nome, qtd: i.quantidade, capital: (i.quantidade * Number(i.custo_base || 0)).toFixed(2) })); criarEBaixarExcelEstilizado(dados, colunas, "Atlas_Produtos_Encalhados", "Estoque Morto"); };
 
-      doc.setFontSize(9); doc.setTextColor(100, 116, 139); doc.setFont("helvetica", "normal");
-      doc.text(`CNPJ: 00.000.000/0001-00 | Inscricao Estadual: 123.456.789.000`, 14, 26);
-      doc.text(`Endereco: Avenida da Inovacao, 1000 - Sao Paulo, SP`, 14, 31);
-      doc.text(`Contato: (11) 4000-0000 | atendimento@atlas-erp.com.br`, 14, 36);
-
-      doc.setDrawColor(226, 232, 240); doc.line(14, 42, 196, 42);
-
-      doc.setFontSize(14); doc.setTextColor(0, 0, 0); doc.setFont("helvetica", "bold");
-      doc.text(`RELATORIO GERENCIAL: ${titulo.replace(/_/g, ' ').toUpperCase()}`, 14, 52);
-
-      doc.setFontSize(10); doc.setTextColor(71, 85, 105); doc.setFont("helvetica", "normal");
-      doc.text(`Data de Emissao: ${new Date().toLocaleString('pt-BR')}`, 14, 58);
-      doc.text(`Emitido por: ${usuarioAtual || 'Sistema'}`, 14, 63);
-
-      autoTable(doc, {
-        startY: 70, head: [colunas], body: linhas, theme: 'grid', headStyles: { fillColor: [0, 0, 0] },
-        didDrawPage: function (data) { doc.setGState(new doc.GState({ opacity: 0.08 })); doc.addImage(img, 'PNG', 35, 90, 140, 120); doc.setGState(new doc.GState({ opacity: 1 })); }
-      });
-
-      const alturaPagina = doc.internal.pageSize.getHeight();
-      doc.setFontSize(11); doc.setTextColor(0, 0, 0); doc.setFont("helvetica", "italic");
-      doc.text(`Documento gerado automaticamente pelo Atlas ERP.`, doc.internal.pageSize.getWidth() / 2, alturaPagina - 15, { align: "center" });
-
-      doc.save(`ATLAS_${titulo}_${Date.now()}.pdf`); toast.success(`Relatorio baixado!`);
-    };
-  };
-
+  const gerarRelatorioPDF = (titulo, colunas, linhas) => { const img = new Image(); img.src = logoAtlas; img.onload = () => { const doc = new jsPDF(); doc.setFontSize(22); doc.setFont("helvetica", "bold"); doc.setTextColor(0, 0, 0); doc.text("ATLAS", 14, 20); const espacoAtlas = doc.getTextWidth("ATLAS "); doc.setTextColor(156, 163, 175); doc.text("ERP", 14 + espacoAtlas, 20); doc.setFontSize(9); doc.setTextColor(100, 116, 139); doc.setFont("helvetica", "normal"); doc.text(`CNPJ: 00.000.000/0001-00 | Inscricao Estadual: 123.456.789.000`, 14, 26); doc.text(`Endereco: Avenida da Inovacao, 1000 - Sao Paulo, SP`, 14, 31); doc.text(`Contato: (11) 4000-0000 | atendimento@atlas-erp.com.br`, 14, 36); doc.setDrawColor(226, 232, 240); doc.line(14, 42, 196, 42); doc.setFontSize(14); doc.setTextColor(0, 0, 0); doc.setFont("helvetica", "bold"); doc.text(`RELATORIO GERENCIAL: ${titulo.replace(/_/g, ' ').toUpperCase()}`, 14, 52); doc.setFontSize(10); doc.setTextColor(71, 85, 105); doc.setFont("helvetica", "normal"); doc.text(`Data de Emissao: ${new Date().toLocaleString('pt-BR')}`, 14, 58); doc.text(`Emitido por: ${usuarioAtual || 'Sistema'}`, 14, 63); autoTable(doc, { startY: 70, head: [colunas], body: linhas, theme: 'grid', headStyles: { fillColor: [0, 0, 0] }, didDrawPage: function (data) { doc.setGState(new doc.GState({ opacity: 0.08 })); doc.addImage(img, 'PNG', 35, 90, 140, 120); doc.setGState(new doc.GState({ opacity: 1 })); } }); const alturaPagina = doc.internal.pageSize.getHeight(); doc.setFontSize(11); doc.setTextColor(0, 0, 0); doc.setFont("helvetica", "italic"); doc.text(`Documento gerado automaticamente pelo Atlas ERP.`, doc.internal.pageSize.getWidth() / 2, alturaPagina - 15, { align: "center" }); doc.save(`ATLAS_${titulo}_${Date.now()}.pdf`); toast.success(`Relatorio baixado!`); }; };
   const acionarRelatorioEstoque = () => { gerarRelatorioPDF('Posicao_de_Estoque', ['SKU', 'Produto', 'Cat', 'Qtd', 'Custo R$', 'Venda R$'], estoque.map(i => [i.sku, i.nome, i.categoria || '-', `${i.quantidade}`, Number(i.custo_base).toFixed(2), Number(i.valor_venda).toFixed(2)])); };
   const acionarRelatorioVendas = () => { gerarRelatorioPDF('Historico_de_Vendas', ['Data', 'Cliente', 'Produto', 'Qtd', 'Faturamento'], historicoVendas.map(v => [new Date(v.created_at).toLocaleDateString(), v.cliente.split('|')[0], v.produto_nome, v.quantidade, `R$ ${Number(v.valor_total).toFixed(2)}`])); };
   const acionarRelatorioEntradas = () => { gerarRelatorioPDF('Notas_de_Entrada', ['Data', 'Fornecedor', 'CNPJ', 'Valor'], notasFiscais.map(n => [new Date(n.created_at).toLocaleDateString(), n.fornecedor, n.cnpj || '-', `R$ ${Number(n.valor_total).toFixed(2)}`])); };
   const acionarRelatorioDevolucoes = () => { gerarRelatorioPDF('Historico_de_Devolucoes', ['Data', 'Cliente', 'Produto', 'Qtd', 'Estornado'], listaDevolucoes.map(d => [new Date(d.created_at).toLocaleDateString(), d.cliente, d.produto_nome, d.quantidade, `R$ ${Number(d.valor_estornado).toFixed(2)}`])); };
 
-  // NOVO: Função para o Gerente criar novo Usuário
   const cadastrarNovoUsuario = async (e) => {
     e.preventDefault();
     const nome = document.getElementById('cad-user-nome').value;
     const login = document.getElementById('cad-user-login').value;
     const senha = document.getElementById('cad-user-senha').value;
     const role = document.getElementById('cad-user-role').value;
-
     if (!nome || !login || !senha) return toast.error("Preencha todos os campos.");
-
     const { error } = await supabase.from('usuarios').insert([{ nome, login, senha, role }]);
-    
-    if (error) {
-      toast.error("Erro ao criar usuario.");
-    } else {
+    if (error) { toast.error("Erro ao criar usuario."); } else {
       toast.success("Usuario criado com sucesso!");
-      document.getElementById('cad-user-nome').value = '';
-      document.getElementById('cad-user-login').value = '';
-      document.getElementById('cad-user-senha').value = '';
+      document.getElementById('cad-user-nome').value = ''; document.getElementById('cad-user-login').value = ''; document.getElementById('cad-user-senha').value = '';
       buscarUsuariosReal();
     }
   };
 
-  // ==========================================
-  // RENDERIZAÇÃO DE ROTEAMENTO
-  // ==========================================
   const renderizarConteudo = () => {
     switch (telaAtiva) {
-
       case 'inicio':
-        return (
-          <div className="tela-centralizada">
-            <img src={logoAtlas} alt="Atlas ERP" className="logo-inicio" />
-            <div className="texto-sessao">Sessao Ativa: {usuarioAtual} ({usuarioRole})</div>
-          </div>
-        );
+        return (<div className="tela-centralizada"><img src={logoAtlas} alt="Atlas ERP" className="logo-inicio" /><div className="texto-sessao">Sessao Ativa: {usuarioAtual} ({usuarioRole})</div></div>);
+      case 'dashboard':
+        return (usuarioRole === 'gerente' || usuarioRole === 'admin') ? <Dashboard estoque={estoque} historicoVendas={historicoVendas} /> : <TelaBloqueada />;
+      case 'receitas-e-despesas':
+        return (usuarioRole === 'gerente' || usuarioRole === 'admin') ? <ExtratoFinanceiro historicoVendas={historicoVendas} historicoDespesas={historicoDespesas} /> : <TelaBloqueada />;
+      case 'detalhes-de-vendas':
+        return (usuarioRole === 'gerente' || usuarioRole === 'admin') ? <RelatorioVendas historicoVendas={historicoVendas} vendaExpandidaId={vendaExpandidaId} setVendaExpandidaId={setVendaExpandidaId} /> : <TelaBloqueada />;
+      case 'painel-de-requisicoes':
+        return <PainelRequisicoes listaRequisicoes={listaRequisicoes} usuarioRole={usuarioRole} atualizarStatusRequisicao={atualizarStatusRequisicao} visualizarPDFRequisicao={visualizarPDFRequisicao} />;
+      case 'emissao-de-nf':
+        return <EmissaoRecibo historicoVendas={historicoVendas} emitirNfeSaida={emitirNfeSaida} />;
+      case 'cadastro-de-item':
+        return <CadastroItem estoque={estoque} salvarCadastroItem={salvarCadastroItem} />;
+      case 'vendas':
+        return <FrenteCaixa estoque={estoque} registrarVenda={registrarVenda} maskCNPJ={maskCNPJ} maskCPF={maskCPF} maskTelefone={maskTelefone} caixaAtivo={caixaAtivo} />;
+      case 'devolucoes':
+        return (usuarioRole === 'gerente' || usuarioRole === 'admin') ? <Devolucoes estoque={estoque} registrarDevolucao={registrarDevolucao} gerarReciboDevolucaoPDF={gerarReciboDevolucaoPDF} maskCNPJ={maskCNPJ} maskCPF={maskCPF} maskTelefone={maskTelefone} /> : <TelaBloqueada />;
+      case 'controle-de-caixa':
+        return <ControleCaixa caixaAtivo={caixaAtivo} abrirCaixa={abrirCaixa} fecharCaixa={fecharCaixa} historicoVendas={historicoVendas} usuarioAtual={usuarioAtual} />;
 
-      case 'dashboard': return usuarioRole === 'gerente' ? <Dashboard estoque={estoque} /> : <TelaBloqueada />;
-      case 'receitas-e-despesas': return usuarioRole === 'gerente' ? <ExtratoFinanceiro historicoVendas={historicoVendas} historicoDespesas={historicoDespesas} /> : <TelaBloqueada />;
-      case 'detalhes-de-vendas': return usuarioRole === 'gerente' ? <RelatorioVendas historicoVendas={historicoVendas} vendaExpandidaId={vendaExpandidaId} setVendaExpandidaId={setVendaExpandidaId} /> : <TelaBloqueada />;
-      case 'painel-de-requisicoes': return <PainelRequisicoes listaRequisicoes={listaRequisicoes} usuarioRole={usuarioRole} atualizarStatusRequisicao={atualizarStatusRequisicao} />;
-      case 'emissao-de-nf': return <EmissaoRecibo historicoVendas={historicoVendas} emitirNfeSaida={emitirNfeSaida} />;
-      case 'cadastro-de-item': return <CadastroItem estoque={estoque} salvarCadastroItem={salvarCadastroItem} />;
-      case 'vendas': return <FrenteCaixa estoque={estoque} registrarVenda={registrarVenda} maskCNPJ={maskCNPJ} maskCPF={maskCPF} maskTelefone={maskTelefone} />;
-      case 'devolucoes': return usuarioRole === 'gerente' ? <Devolucoes estoque={estoque} registrarDevolucao={registrarDevolucao} gerarReciboDevolucaoPDF={gerarReciboDevolucaoPDF} /> : <TelaBloqueada />;
-
-      // ==========================================
-      // NOVA TELA: GERENCIAR USUÁRIOS
-      // ==========================================
-      case 'gerenciar-usuarios':
-        if (usuarioRole !== 'gerente') return <TelaBloqueada />;
+      case 'historico-de-caixa':
+        if (usuarioRole === 'caixa') return <TelaBloqueada />;
         return (
           <div className="atlas-container">
             <header className="atlas-header">
-              <div>
-                <h1>Gestao de Usuarios</h1>
-                <p>Cadastre novos funcionarios e defina os niveis de acesso</p>
-              </div>
+              <div><h1>Auditoria de Caixa</h1><p>Acompanhamento de aberturas, fechamentos e quebras</p></div>
             </header>
-            
+            <div className="atlas-card full">
+              <table className="atlas-tabela">
+                <thead>
+                  <tr>
+                    <th>Abertura</th>
+                    <th>Operador</th>
+                    <th>Fundo Inicial</th>
+                    <th>Venda Sist.</th>
+                    <th>Contagem Fisica</th>
+                    <th>Diferenca</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {historicoCaixa.map(c => {
+                    const diff = (c.valor_final_fisico || 0) - (c.valor_final_sistema || 0);
+                    return (
+                      <tr key={c.id}>
+                        <td>{new Date(c.data_abertura).toLocaleString('pt-BR')}</td>
+                        <td>{c.usuario_abertura}</td>
+                        <td>R$ {Number(c.valor_inicial).toFixed(2)}</td>
+                        <td>{c.status === 'fechado' ? `R$ ${Number(c.valor_final_sistema).toFixed(2)}` : '-'}</td>
+                        <td>{c.status === 'fechado' ? `R$ ${Number(c.valor_final_fisico).toFixed(2)}` : '-'}</td>
+                        <td style={{ color: c.status === 'fechado' ? (diff < 0 ? '#e11d48' : diff > 0 ? '#16a34a' : '#475569') : 'inherit', fontWeight: 'bold' }}>
+                          {c.status === 'fechado' ? `R$ ${diff.toFixed(2)}` : '-'}
+                        </td>
+                        <td>
+                          <span className={`status-badge ${c.status === 'aberto' ? 'status-verde' : 'status-alerta'}`}>
+                            {c.status ? c.status.toUpperCase() : 'DESCONHECIDO'}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        );
+
+      case 'posicao-de-estoque':
+        if (usuarioRole === 'caixa') return <TelaBloqueada />;
+        return (
+          <div className="atlas-container">
+            <header className="atlas-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div><h1>Posicao de Estoque</h1><p>Visualizacao do saldo atual de mercadorias</p></div>
+              <button className="botao-primario btn-bg-black" onClick={acionarRelatorioEstoque}>Exportar PDF</button>
+            </header>
+            <div className="atlas-card full">
+              <table className="atlas-tabela">
+                <thead><tr><th>SKU</th><th>Produto</th><th>Categoria</th><th>Qtd</th><th>Custo R$</th><th>Venda R$</th></tr></thead>
+                <tbody>
+                  {estoque.map(i => (
+                    <tr key={i.id}><td>{i.sku}</td><td>{i.nome}</td><td>{i.categoria || '-'}</td><td style={{ fontWeight: 'bold' }}>{i.quantidade}</td><td>{Number(i.custo_base).toFixed(2)}</td><td>{Number(i.valor_venda).toFixed(2)}</td></tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        );
+
+      case 'historico-de-vendas':
+        if (usuarioRole === 'caixa') return <TelaBloqueada />;
+        return (
+          <div className="atlas-container">
+            <header className="atlas-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div><h1>Historico de Vendas</h1><p>Todas as saidas faturadas no sistema</p></div>
+              <button className="botao-primario btn-bg-black" onClick={acionarRelatorioVendas}>Exportar PDF</button>
+            </header>
+            <div className="atlas-card full">
+              <table className="atlas-tabela">
+                <thead><tr><th>Data</th><th>Cliente</th><th>Produto</th><th>Qtd</th><th>Total R$</th></tr></thead>
+                <tbody>
+                  {historicoVendas.map(v => (
+                    <tr key={v.id}><td>{new Date(v.created_at).toLocaleDateString()}</td><td>{v.cliente.split('|')[0]}</td><td>{v.produto_nome}</td><td>{v.quantidade}</td><td style={{ fontWeight: 'bold', color: '#16a34a' }}>{Number(v.valor_total).toFixed(2)}</td></tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        );
+
+      case 'notas-de-entrada':
+        if (usuarioRole === 'caixa') return <TelaBloqueada />;
+        return (
+          <div className="atlas-container">
+            <header className="atlas-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div><h1>Notas de Entrada</h1><p>Registro de notas de compras e reposicoes</p></div>
+              <button className="botao-primario btn-bg-black" onClick={acionarRelatorioEntradas}>Exportar PDF</button>
+            </header>
+            <div className="atlas-card full">
+              <table className="atlas-tabela">
+                <thead><tr><th>Data</th><th>Fornecedor</th><th>CNPJ</th><th>Valor R$</th></tr></thead>
+                <tbody>
+                  {notasFiscais.map(n => (
+                    <tr key={n.id}><td>{new Date(n.created_at).toLocaleDateString()}</td><td>{n.fornecedor}</td><td>{n.cnpj || '-'}</td><td style={{ fontWeight: 'bold' }}>{Number(n.valor_total).toFixed(2)}</td></tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        );
+
+      case 'historico-de-devolucoes':
+        if (usuarioRole === 'caixa') return <TelaBloqueada />;
+        return (
+          <div className="atlas-container">
+            <header className="atlas-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div><h1>Historico de Devolucoes</h1><p>Registro de estornos e retornos de mercadorias</p></div>
+              <button className="botao-primario btn-bg-black" onClick={acionarRelatorioDevolucoes}>Exportar PDF</button>
+            </header>
+            <div className="atlas-card full">
+              <table className="atlas-tabela">
+                <thead><tr><th>Data</th><th>Cliente</th><th>Produto</th><th>Motivo</th><th>Qtd</th><th>Estornado R$</th></tr></thead>
+                <tbody>
+                  {listaDevolucoes.map(d => (
+                    <tr key={d.id}><td>{new Date(d.created_at).toLocaleDateString()}</td><td>{d.cliente.split('|')[0]}</td><td>{d.produto_nome}</td><td>{d.motivo}</td><td>{d.quantidade}</td><td style={{ fontWeight: 'bold', color: '#e11d48' }}>{Number(d.valor_estornado).toFixed(2)}</td></tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        );
+
+      case 'exportacoes-e-bi':
+        if (usuarioRole === 'caixa') return <TelaBloqueada />;
+        return (
+          <div className="atlas-container">
+            <header className="atlas-header">
+              <div><h1>Central de Inteligencia e BI</h1><p>Exportacao de planilhas customizadas de alta performance</p></div>
+            </header>
+            <div className="atlas-grid" style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}>
+              <div className="atlas-card card-centro">
+                <h3>Todos os Produtos</h3><p className="texto-cinza font-12 mt-10">Lista completa com EAN, NCM, Saldo fisico e valores Base.</p>
+                <button className="botao-secundario w-100 mt-20" onClick={exportarExcelEstoqueCompleto}>Baixar Excel</button>
+              </div>
+              <div className="atlas-card card-centro">
+                <h3>Margem de Lucro (Base SP)</h3><p className="texto-cinza font-12 mt-10">Calculo de Lucro Liquido abatendo ICMS padrao (18%) e IPI.</p>
+                <button className="botao-secundario w-100 mt-20" onClick={exportarExcelMargemLucro}>Baixar Excel</button>
+              </div>
+              <div className="atlas-card card-centro">
+                <h3>Produtos Encalhados</h3><p className="texto-cinza font-12 mt-10">Descubra qual estoque parou e nao vendeu no periodo.</p>
+                <div style={{ display: 'flex', gap: '5px', marginTop: '15px' }}>
+                  <input type="date" className="input-tabela" value={dataInicioEncalhado} onChange={e => setDataInicioEncalhado(e.target.value)} title="Data Inicial" />
+                  <input type="date" className="input-tabela" value={dataFimEncalhado} onChange={e => setDataFimEncalhado(e.target.value)} title="Data Final" />
+                </div>
+                <button className="botao-secundario w-100 mt-10" onClick={exportarExcelEncalhados}>Baixar Excel</button>
+              </div>
+            </div>
+          </div>
+        );
+
+      case 'gerenciar-usuarios':
+        if (usuarioRole !== 'admin') return <TelaBloqueada />;
+        return (
+          <div className="atlas-container">
+            <header className="atlas-header"><div><h1>Gestao de Usuarios</h1></div></header>
             <div className="atlas-grid grid-start">
               <div className="atlas-card">
                 <div className="card-titulo">Novo Usuario</div>
                 <div className="coluna-flex">
-                  <div className="atlas-campo">
-                    <label>Nome Completo</label>
-                    <input type="text" id="cad-user-nome" />
-                  </div>
-                  <div className="atlas-campo">
-                    <label>Login de Acesso</label>
-                    <input type="text" id="cad-user-login" />
-                  </div>
-                  <div className="atlas-campo">
-                    <label>Senha Provisoria</label>
-                    <input type="password" id="cad-user-senha" placeholder="Defina uma senha" />
-                  </div>
+                  <div className="atlas-campo"><label>Nome Completo</label><input type="text" id="cad-user-nome" /></div>
+                  <div className="atlas-campo"><label>Login de Acesso</label><input type="text" id="cad-user-login" /></div>
+                  <div className="atlas-campo"><label>Senha Provisoria</label><input type="password" id="cad-user-senha" placeholder="Defina uma senha" /></div>
                   <div className="atlas-campo">
                     <label>Nivel de Acesso</label>
                     <select id="cad-user-role">
                       <option value="caixa">Operador de Caixa (Limitado)</option>
-                      <option value="gerente">Gerente Geral (Acesso Total)</option>
+                      <option value="gerente">Gerente de Loja (Operacional)</option>
+                      <option value="admin">Administrador (Acesso Total)</option>
                     </select>
                   </div>
-                  <button className="botao-primario w-100 mt-15" onClick={cadastrarNovoUsuario}>
-                    Criar Credencial
-                  </button>
+                  <button className="botao-primario w-100 mt-15" onClick={cadastrarNovoUsuario}>Criar Credencial</button>
                 </div>
               </div>
-
               <div className="atlas-card">
                 <div className="card-titulo">Equipe Cadastrada</div>
                 <table className="atlas-tabela">
                   <thead><tr><th>Nome</th><th>Login</th><th>Acesso</th></tr></thead>
-                  <tbody>
-                    {listaUsuarios.map(u => (
-                      <tr key={u.id}>
-                        <td><strong>{u.nome}</strong></td>
-                        <td>{u.login}</td>
-                        <td style={{ textTransform: 'capitalize' }}>{u.role}</td>
-                      </tr>
-                    ))}
-                  </tbody>
+                  <tbody>{listaUsuarios.map(u => (<tr key={u.id}><td><strong>{u.nome}</strong></td><td>{u.login}</td><td style={{ textTransform: 'capitalize' }}>{u.role}</td></tr>))}</tbody>
                 </table>
               </div>
             </div>
@@ -557,21 +639,15 @@ function App() {
         );
 
       case 'ajustes':
-        if (usuarioRole !== 'gerente') return <TelaBloqueada />;
+        if (usuarioRole === 'caixa') return <TelaBloqueada />;
         return (
           <div className="atlas-container">
             <header className="atlas-header"><h1>Manutencao de Saldos</h1></header>
             <div className="atlas-card">
               <div className="atlas-linha">
-                <div className="atlas-campo flex-2">
-                  <select id="sel-ajuste"><option value="">Selecione...</option>{estoque.map(i => <option key={i.id} value={i.id}>{i.nome}</option>)}</select>
-                </div>
-                <div className="atlas-campo">
-                  <select id="tipo-ajuste"><option value="entrada">Credito (+)</option><option value="saida">Debito (-)</option></select>
-                </div>
-                <div className="atlas-campo">
-                  <input type="number" id="qtd-ajuste" placeholder="Qtd" />
-                </div>
+                <div className="atlas-campo flex-2"><select id="sel-ajuste"><option value="">Selecione...</option>{estoque.map(i => <option key={i.id} value={i.id}>{i.nome}</option>)}</select></div>
+                <div className="atlas-campo"><select id="tipo-ajuste"><option value="entrada">Credito (+)</option><option value="saida">Debito (-)</option></select></div>
+                <div className="atlas-campo"><input type="number" id="qtd-ajuste" placeholder="Qtd" /></div>
               </div>
               <button className="botao-primario w-100 mt-20" onClick={realizarAjusteEstoque}>Ajustar</button>
             </div>
@@ -584,76 +660,30 @@ function App() {
             <header className="atlas-header"><div><h1>Solicitar Requisicao Interna</h1></div></header>
             <div className="atlas-card centralizado-800">
               <div className="atlas-linha">
-                <div className="atlas-campo flex-2">
-                  <label>Natureza do Chamado</label>
-                  <select id="req-tipo">
-                    <option value="Compra Insumos (Loja)">Compra de Insumos</option>
-                    <option value="Manutencao de Equipamento">Manutencao</option>
-                    <option value="Ajuste de Sistema">Ajuste de Sistema</option>
-                  </select>
-                </div>
+                <div className="atlas-campo flex-2"><label>Natureza do Chamado</label><select id="req-tipo"><option value="Compra Insumos (Loja)">Compra de Insumos</option><option value="Manutencao de Equipamento">Manutencao</option><option value="Ajuste de Sistema">Ajuste de Sistema</option></select></div>
               </div>
-              <div className="atlas-linha mt-15">
-                <div className="atlas-campo w-100">
-                  <label>Justificativa / Detalhes</label>
-                  <textarea id="req-justificativa" className="input-tabela input-textarea" placeholder="Descreva sua solicitacao..."></textarea>
-                </div>
-              </div>
+              <div className="atlas-linha mt-15"><div className="atlas-campo w-100"><label>Justificativa / Detalhes</label><textarea id="req-justificativa" className="input-tabela input-textarea" placeholder="Descreva o que voce precisa ou o que quebrou..."></textarea></div></div>
               <button className="botao-primario w-100 mt-20" onClick={registrarRequisicaoInterna}>Enviar Pedido para Gerencia</button>
             </div>
           </div>
         );
 
       case 'log-de-estoque':
-        if (usuarioRole !== 'gerente') return <TelaBloqueada />;
+        if (usuarioRole === 'caixa') return <TelaBloqueada />;
         return (
           <div className="atlas-container">
             <header className="atlas-header"><div><h1>Auditoria de Estoque</h1></div></header>
             <div className="atlas-card full">
               <table className="atlas-tabela">
                 <thead><tr><th>Data</th><th>Produto</th><th>Natureza</th><th>Movimentacao</th></tr></thead>
-                <tbody>
-                  {logEstoque.map(log => (
-                    <tr key={log.id}>
-                      <td>{new Date(log.created_at).toLocaleString('pt-BR')}</td>
-                      <td>{log.produto_nome}</td>
-                      <td>{log.tipo_movimentacao}</td>
-                      <td className={log.quantidade_alterada > 0 ? 'texto-verde-bold' : 'texto-vermelho-bold'}>{log.quantidade_alterada}</td>
-                    </tr>
-                  ))}
-                </tbody>
+                <tbody>{logEstoque.map(log => (<tr key={log.id}><td>{new Date(log.created_at).toLocaleString('pt-BR')}</td><td>{log.produto_nome}</td><td>{log.tipo_movimentacao}</td><td className={log.quantidade_alterada > 0 ? 'texto-verde-bold' : 'texto-vermelho-bold'}>{log.quantidade_alterada}</td></tr>))}</tbody>
               </table>
             </div>
           </div>
         );
 
-      case 'exportar-pdfs':
-        if (usuarioRole !== 'gerente') return <TelaBloqueada />;
-        return (
-          <div className="atlas-container">
-            <header className="atlas-header"><div><h1>Central de Relatorios PDF</h1><p>Emita documentos com a marca corporativa ATLAS</p></div></header>
-            <div className="atlas-grid" style={{ gridTemplateColumns: 'repeat(4, 1fr)' }}>
-              <div className="atlas-card card-centro">
-                <h3>Estoque</h3>
-                <button className="botao-primario btn-bg-black w-100 mt-20" onClick={acionarRelatorioEstoque}>Baixar PDF</button>
-              </div>
-              <div className="atlas-card card-centro">
-                <h3>Vendas</h3>
-                <button className="botao-primario btn-bg-black w-100 mt-20" onClick={acionarRelatorioVendas}>Baixar PDF</button>
-              </div>
-              <div className="atlas-card card-centro">
-                <h3>Entradas</h3>
-                <button className="botao-primario btn-bg-black w-100 mt-20" onClick={acionarRelatorioEntradas}>Baixar PDF</button>
-              </div>
-              <div className="atlas-card card-centro">
-                <h3>Devolucoes</h3>
-                <button className="botao-primario btn-bg-black w-100 mt-20" onClick={acionarRelatorioDevolucoes}>Baixar PDF</button>
-              </div>
-            </div>
-          </div>
-        );
-
-      case 'entradas': return <Entradas setTelaAtiva={setTelaAtiva} confirmarEntradaComPendencia={confirmarEntradaComPendencia} maskCNPJ={maskCNPJ} manipularUpload={manipularUpload} imagemAnexada={imagemAnexada} setImagemAnexada={setImagemAnexada} linhasItens={linhasItens} atualizarValorLinha={atualizarValorLinha} removerLinha={removerLinha} adicionarLinha={adicionarLinha} />;
+      case 'entradas':
+        return <Entradas setTelaAtiva={setTelaAtiva} confirmarEntradaComPendencia={confirmarEntradaComPendencia} maskCNPJ={maskCNPJ} manipularUpload={manipularUpload} imagemAnexada={imagemAnexada} setImagemAnexada={setImagemAnexada} linhasItens={linhasItens} atualizarValorLinha={atualizarValorLinha} removerLinha={removerLinha} adicionarLinha={adicionarLinha} />;
 
       case 'saidas':
         return (
@@ -661,7 +691,14 @@ function App() {
             <header className="atlas-header"><div><h1>Expedicao Avulsa</h1></div></header>
             <div className="atlas-card full">
               <table className="atlas-tabela">
-                <thead><tr><th>Produto Registrado</th><th>Quantidade</th><th>Motivo</th><th>Acao</th></tr></thead>
+                <thead>
+                  <tr>
+                    <th>Produto Registrado</th>
+                    <th>Quantidade</th>
+                    <th>Motivo</th>
+                    <th>Acao</th>
+                  </tr>
+                </thead>
                 <tbody>
                   {linhasItens.map(linha => (
                     <tr key={linha.id}>
@@ -687,21 +724,14 @@ function App() {
             <div className="atlas-card full">
               <table className="atlas-tabela">
                 <thead><tr><th>Produto</th><th>Saldo Atual</th><th>Acao</th></tr></thead>
-                <tbody>
-                  {itensEmAlerta.map(item => (
-                    <tr key={item.id}>
-                      <td>{item.nome}</td>
-                      <td style={{ fontWeight: 'bold' }}>{item.quantidade} un</td>
-                      <td><button className="botao-secundario" onClick={() => gerarSolicitacaoCompra(item)}>Iniciar Cotacao</button></td>
-                    </tr>
-                  ))}
-                </tbody>
+                <tbody>{itensEmAlerta.map(item => (<tr key={item.id}><td>{item.nome}</td><td style={{ fontWeight: 'bold' }}>{item.quantidade} un</td><td><button className="botao-secundario" onClick={() => gerarSolicitacaoCompra(item)}>Iniciar Cotacao</button></td></tr>))}</tbody>
               </table>
             </div>
           </div>
         );
 
-      case 'consultar-itens': return <Inventario termoBusca={termoBusca} setTermoBusca={setTermoBusca} estoque={estoque} gerarSolicitacaoCompra={gerarSolicitacaoCompra} />;
+      case 'consultar-itens':
+        return <Inventario termoBusca={termoBusca} setTermoBusca={setTermoBusca} estoque={estoque} gerarSolicitacaoCompra={gerarSolicitacaoCompra} />;
 
       case 'categorias':
         return (
@@ -722,8 +752,26 @@ function App() {
             <header className="atlas-header"><h1>Fornecedores</h1><button className="botao-primario" onClick={() => setTelaAtiva('cadastro-de-fornecedor')}>Homologar</button></header>
             <div className="atlas-card full">
               <table className="atlas-tabela">
-                <thead><tr><th>Razao Social</th><th>CNPJ</th></tr></thead>
-                <tbody>{listaFornecedores.map(f => (<tr key={f.id}><td>{f.razao}</td><td>{f.cnpj}</td></tr>))}</tbody>
+                <thead>
+                  <tr>
+                    <th>Razao Social</th>
+                    <th>CNPJ</th>
+                    <th>E-mail</th>
+                    <th>Telefone</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {listaFornecedores.map(f => (
+                    <tr key={f.id}>
+                      <td>{f.razao}</td>
+                      <td>{f.cnpj}</td>
+                      <td>{f.email || '-'}</td>
+                      <td>{f.telefone || '-'}</td>
+                      <td>{f.status || 'Ativo'}</td>
+                    </tr>
+                  ))}
+                </tbody>
               </table>
             </div>
           </div>
@@ -746,7 +794,16 @@ function App() {
             <header className="atlas-header"><div><h1>Cotacoes</h1></div></header>
             <div className="atlas-card full">
               <table className="atlas-tabela">
-                <thead><tr><th>Produto</th><th>Qtd</th><th>Fornecedor Base</th><th>Opcao B</th><th>Opcao C</th><th>Acao</th></tr></thead>
+                <thead>
+                  <tr>
+                    <th>Produto</th>
+                    <th>Qtd</th>
+                    <th>Fornecedor Base</th>
+                    <th>Opcao B</th>
+                    <th>Opcao C</th>
+                    <th>Acao</th>
+                  </tr>
+                </thead>
                 <tbody>
                   {[...solicitacoesCotacao, ...linhasItens.map(l => ({ ...l, isManual: true }))].map(cot => (
                     <tr key={cot.id}>
@@ -790,11 +847,56 @@ function App() {
     <div className="container-principal">
       <ToastContainer position="top-right" autoClose={2000} theme="colored" />
       <MenuNavegacao itensMenu={itensMenu} setTelaAtiva={setTelaAtiva} usuarioAtual={usuarioAtual} realizarLogoff={realizarLogoff} />
-      <main className="conteudo-pagina">
+
+      {mostrarSidebar && (
+        <div className="menu-lateral-esquerdo">
+          {mostrarMenuEsquerdo && (
+            <>
+              <div className="titulo-menu-lateral">
+                {categoriaAtual.nome}
+              </div>
+              {categoriaAtual.filhos.map(filho => {
+                const slug = gerarSlug(filho);
+                const isAtivo = telaAtiva === slug;
+                return (
+                  <button
+                    key={slug}
+                    onClick={() => setTelaAtiva(slug)}
+                    className={`btn-menu-lateral ${isAtivo ? 'ativo' : ''}`}
+                  >
+                    {filho}
+                  </button>
+                );
+              })}
+              <div className="divisor-lateral"></div>
+            </>
+          )}
+
+          <div className="titulo-menu-lateral">Meus Atalhos</div>
+          {favoritos.map(fav => (
+            <button
+              key={fav}
+              onClick={() => setTelaAtiva(fav)}
+              className={`btn-menu-lateral ${telaAtiva === fav ? 'ativo' : ''}`}
+              title={`Ir para ${nomesDasTelas[fav] || fav}`}
+            >
+              {nomesDasTelas[fav] || fav}
+            </button>
+          ))}
+
+          <button
+            onClick={gerenciarFavoritos}
+            className={`btn-atalho-acao ${favoritos.includes(telaAtiva) ? 'remover' : ''}`}
+            title={favoritos.includes(telaAtiva) ? "Remover tela atual dos atalhos" : "Fixar tela atual nos atalhos"}
+          >
+            {favoritos.includes(telaAtiva) ? 'Remover Favorito' : 'Salvar Favorito'}
+          </button>
+        </div>
+      )}
+
+      <main className={`conteudo-pagina ${mostrarSidebar ? 'com-sidebar' : 'sem-sidebar'}`}>
         {renderizarConteudo()}
       </main>
     </div>
   );
 }
-
-export default App;
