@@ -9,280 +9,231 @@ import {
   ArcElement,
   Title,
   Tooltip,
-  Legend
+  Legend,
+  Filler
 } from 'chart.js';
-import { Line, Bar, Doughnut } from 'react-chartjs-2';
+import { Line, Doughnut } from 'react-chartjs-2';
 
 ChartJS.register(
-  CategoryScale,
-  LinearScale,
-  PointElement,
-  LineElement,
-  BarElement,
-  ArcElement,
-  Title,
-  Tooltip,
-  Legend
+  CategoryScale, LinearScale, PointElement, LineElement,
+  BarElement, ArcElement, Title, Tooltip, Legend, Filler
 );
 
-export default function Dashboard({ estoque = [], historicoVendas = [] }) {
-  
-  const totalItens = estoque.length;
-  const capitalEstoque = estoque.reduce((acc, item) => acc + (Number(item.quantidade) * Number(item.custo_base || 0)), 0);
-  const itensFiltroAlerta = estoque.filter(i => i.quantidade <= (i.estoque_minimo || 5));
-  const itensAlerta = itensFiltroAlerta.length;
-  const faturamentoTotal = historicoVendas.reduce((acc, v) => acc + Number(v.valor_total), 0);
+export default function Dashboard({ estoque = [], historicoVendas = [], historicoDespesas = [] }) {
 
-  const ultimos7Dias = Array.from({length: 7}, (_, i) => {
+  // --- MATEMÁTICA FINANCEIRA REAL ---
+  const faturamentoBruto = historicoVendas.reduce((acc, v) => acc + Number(v.valor_total), 0);
+
+  const totalCMV = historicoVendas.reduce((acc, v) => {
+    const prod = estoque.find(p => p.id === v.produto_id);
+    const custoUnitario = prod ? Number(prod.custo_base || 0) : 0;
+    return acc + (custoUnitario * Number(v.quantidade));
+  }, 0);
+
+  const totalDespesas = historicoDespesas.reduce((acc, d) => acc + Number(d.valor_total || 0), 0);
+
+  const lucroReal = faturamentoBruto - totalCMV - totalDespesas;
+  const margemLucro = faturamentoBruto > 0 ? (lucroReal / faturamentoBruto) * 100 : 0;
+
+  // --- MÉTRICAS DE ESTOQUE ---
+  const capitalEstoque = estoque.reduce((acc, item) => acc + (Number(item.quantidade) * Number(item.custo_base || 0)), 0);
+  const itensAlerta = estoque.filter(i => i.quantidade <= (i.estoque_minimo || 5)).length;
+
+  // --- GRÁFICO DE EVOLUÇÃO (7 DIAS) ---
+  const ultimos7Dias = Array.from({ length: 7 }, (_, i) => {
     const d = new Date();
     d.setDate(d.getDate() - i);
-    return d.toLocaleDateString('pt-BR', {day: '2-digit', month: '2-digit'});
+    return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
   }).reverse();
 
-  const faturamentoPorDia = ultimos7Dias.map(dia => {
+  const dadosFaturamentoDia = ultimos7Dias.map(dia => {
     return historicoVendas
-      .filter(v => new Date(v.created_at).toLocaleDateString('pt-BR', {day: '2-digit', month: '2-digit'}) === dia)
+      .filter(v => new Date(v.created_at).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) === dia)
       .reduce((acc, v) => acc + Number(v.valor_total), 0);
+  });
+
+  const dadosLucroDia = ultimos7Dias.map(dia => {
+    const vendasDia = historicoVendas.filter(v => new Date(v.created_at).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) === dia);
+    const faturamento = vendasDia.reduce((acc, v) => acc + Number(v.valor_total), 0);
+    const custo = vendasDia.reduce((acc, v) => {
+      const p = estoque.find(prod => prod.id === v.produto_id);
+      return acc + (Number(p?.custo_base || 0) * Number(v.quantidade));
+    }, 0);
+    return faturamento - custo;
   });
 
   const dataLinha = {
     labels: ultimos7Dias,
-    datasets: [{
-      label: 'Faturamento (R$)',
-      data: faturamentoPorDia,
-      borderColor: '#2563eb',
-      backgroundColor: 'rgba(37, 99, 235, 0.1)',
-      tension: 0.4,
-      fill: true,
-      pointBackgroundColor: '#1e40af',
-      pointRadius: 4
-    }]
+    datasets: [
+      {
+        label: 'Vendas (R$)',
+        data: dadosFaturamentoDia,
+        borderColor: '#2563eb',
+        backgroundColor: 'rgba(37, 99, 235, 0.1)',
+        tension: 0.4,
+        fill: true,
+      },
+      {
+        label: 'Lucro Bruto (R$)',
+        data: dadosLucroDia,
+        borderColor: '#10b981',
+        backgroundColor: 'rgba(16, 185, 129, 0.1)',
+        tension: 0.4,
+        fill: true,
+      }
+    ]
   };
 
+  // --- TOP PRODUTOS E CATEGORIAS ---
   const mapVendas = {};
-  historicoVendas.forEach(v => {
-    mapVendas[v.produto_id] = (mapVendas[v.produto_id] || 0) + Number(v.quantidade);
-  });
+  historicoVendas.forEach(v => { mapVendas[v.produto_id] = (mapVendas[v.produto_id] || 0) + Number(v.quantidade); });
 
-  const desempenhoEstoque = estoque.filter(i => i.quantidade > 0).map(item => ({
-    nome: item.nome,
-    qtdVendida: mapVendas[item.id] || 0
-  }));
-
-  const topProdutos = [...desempenhoEstoque]
-    .filter(i => i.qtdVendida > 0)
-    .sort((a, b) => b.qtdVendida - a.qtdVendida)
+  // Os 5 mais vendidos
+  const topProdutos = estoque
+    .filter(i => mapVendas[i.id] > 0)
+    .map(i => ({ nome: i.nome, qtd: mapVendas[i.id] }))
+    .sort((a, b) => b.qtd - a.qtd)
     .slice(0, 5);
 
-  const pioresProdutos = [...desempenhoEstoque]
-    .sort((a, b) => a.qtdVendida - b.qtdVendida)
+  // Os 5 menos vendidos (mas que têm saldo no estoque)
+  const pioresProdutos = estoque
+    .filter(i => i.quantidade > 0) // Só avalia o que está ocupando espaço na loja
+    .map(i => ({ nome: i.nome, qtd: mapVendas[i.id] || 0 })) // Se não vendeu nada, é 0
+    .sort((a, b) => a.qtd - b.qtd)
     .slice(0, 5);
-
-  const dataBarraMelhores = {
-    labels: topProdutos.map(p => p.nome.length > 12 ? p.nome.substring(0, 12) + '...' : p.nome),
-    datasets: [{
-      label: 'Unidades Vendidas',
-      data: topProdutos.map(p => p.qtdVendida),
-      backgroundColor: ['#16a34a', '#2563eb', '#f59e0b', '#d97706', '#8b5cf6'],
-      borderRadius: 4
-    }]
-  };
-
-  const dataBarraPiores = {
-    labels: pioresProdutos.map(p => p.nome.length > 12 ? p.nome.substring(0, 12) + '...' : p.nome),
-    datasets: [{
-      label: 'Unidades Vendidas',
-      data: pioresProdutos.map(p => p.qtdVendida),
-      backgroundColor: ['#ef4444', '#f87171', '#fca5a5', '#fecaca', '#fee2e2'],
-      borderRadius: 4
-    }]
-  };
 
   const vendasPorCategoria = {};
-  const ultimaVendaMap = {};
-
   historicoVendas.forEach(v => {
-    const produto = estoque.find(p => p.id === v.produto_id);
-    const categoria = produto?.categoria || 'Sem Categoria';
-    if (vendasPorCategoria[categoria]) {
-      vendasPorCategoria[categoria] += Number(v.valor_total);
-    } else {
-      vendasPorCategoria[categoria] = Number(v.valor_total);
-    }
-
-    const dataVenda = new Date(v.created_at).getTime();
-    if (!ultimaVendaMap[v.produto_id] || dataVenda > ultimaVendaMap[v.produto_id]) {
-      ultimaVendaMap[v.produto_id] = dataVenda;
-    }
+    const cat = estoque.find(p => p.id === v.produto_id)?.categoria || 'Geral';
+    vendasPorCategoria[cat] = (vendasPorCategoria[cat] || 0) + Number(v.valor_total);
   });
+
+  // Cores extras para aguentar muitas categorias novas
+  const coresCategorias = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#64748b', '#ec4899', '#14b8a6', '#f97316', '#06b6d4'];
 
   const dataRosca = {
     labels: Object.keys(vendasPorCategoria),
     datasets: [{
       data: Object.values(vendasPorCategoria),
-      backgroundColor: ['#2563eb', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#64748b'],
-      borderWidth: 0,
-      hoverOffset: 4
+      backgroundColor: coresCategorias,
+      borderWidth: 0
     }]
   };
-
-  // Removi o limite de 5 itens. Agora mostra todos os produtos parados.
-  const produtosParados = estoque
-    .filter(i => i.quantidade > 0)
-    .map(item => {
-      const ultima = ultimaVendaMap[item.id];
-      let diasParado = Infinity; 
-      let textoUltima = "Nunca vendido";
-
-      if (ultima) {
-        const diffTempo = new Date().getTime() - ultima;
-        diasParado = Math.floor(diffTempo / (1000 * 3600 * 24));
-        textoUltima = diasParado === 0 ? "Vendido hoje" : `Ha ${diasParado} dias`;
-      }
-
-      return { ...item, diasParado, textoUltima };
-    })
-    .sort((a, b) => b.diasParado - a.diasParado); 
 
   return (
     <div className="atlas-container">
       <header className="atlas-header">
         <div>
-          <h1>Painel Gerencial</h1>
-          <p>Visao 360 de performance, vendas e oportunidades</p>
+          <h1>Dashboard Atlas ERP</h1>
+          <p>Sua empresa em números reais, descontando perdas e custos.</p>
         </div>
       </header>
 
+      {/* CARDS FINANCEIROS */}
       <div className="atlas-grid" style={{ gridTemplateColumns: 'repeat(4, 1fr)', marginBottom: '20px' }}>
-        <div className="atlas-card card-centro" style={{ borderLeft: '4px solid #3b82f6' }}>
-          <h3 style={{ color: '#64748b', fontSize: '14px', marginBottom: '5px' }}>Total de Produtos</h3>
-          <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#0f172a' }}>{totalItens} skus</div>
+        <div className="atlas-card card-centro" style={{ borderTop: '4px solid #3b82f6' }}>
+          <h3 className="texto-cinza font-12">Faturamento Bruto</h3>
+          <div className="font-22 bold">R$ {faturamentoBruto.toFixed(2)}</div>
+          <span className="font-11 texto-verde">Dinheiro em caixa</span>
         </div>
-        <div className="atlas-card card-centro" style={{ borderLeft: '4px solid #10b981' }}>
-          <h3 style={{ color: '#64748b', fontSize: '14px', marginBottom: '5px' }}>Capital Imobilizado</h3>
-          <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#0f172a' }}>R$ {capitalEstoque.toFixed(2)}</div>
+
+        <div className="atlas-card card-centro" style={{ borderTop: '4px solid #10b981', background: '#f0fdf4' }}>
+          <h3 className="texto-cinza font-12" style={{ color: '#15803d' }}>Lucro Líquido Real</h3>
+          <div className="font-22 bold" style={{ color: '#15803d' }}>R$ {lucroReal.toFixed(2)}</div>
+          <span className="font-11 bold" style={{ color: '#16a34a' }}>{margemLucro.toFixed(1)}% de margem</span>
         </div>
-        <div className="atlas-card card-centro" style={{ borderLeft: '4px solid #f59e0b' }}>
-          <h3 style={{ color: '#64748b', fontSize: '14px', marginBottom: '5px' }}>Itens em Alerta (Baixo)</h3>
-          <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#b45309' }}>{itensAlerta} itens</div>
+
+        <div className="atlas-card card-centro" style={{ borderTop: '4px solid #ef4444', background: '#fef2f2' }}>
+          <h3 className="texto-cinza font-12" style={{ color: '#b91c1c' }}>Despesas e Perdas</h3>
+          <div className="font-22 bold" style={{ color: '#b91c1c' }}>R$ {totalDespesas.toFixed(2)}</div>
+          <span className="font-11 texto-cinza">Avarias, Estornos e Fixos</span>
         </div>
-        <div className="atlas-card card-centro" style={{ borderLeft: '4px solid #8b5cf6' }}>
-          <h3 style={{ color: '#64748b', fontSize: '14px', marginBottom: '5px' }}>Faturamento Global</h3>
-          <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#0f172a' }}>R$ {faturamentoTotal.toFixed(2)}</div>
+
+        <div className="atlas-card card-centro" style={{ borderTop: '4px solid #f59e0b' }}>
+          <h3 className="texto-cinza font-12">Capital em Estoque</h3>
+          <div className="font-22 bold">R$ {capitalEstoque.toFixed(2)}</div>
+          <span className="font-11" style={{ color: '#d97706' }}>{itensAlerta} itens p/ repor</span>
         </div>
       </div>
 
-      <div className="atlas-linha" style={{ marginBottom: '20px', gap: '20px', alignItems: 'stretch' }}>
-        <div className="atlas-card" style={{ flex: 2 }}>
-          <div className="card-titulo">Evolucao do Faturamento (7 Dias)</div>
-          <div style={{ height: '250px', display: 'flex', justifyContent: 'center' }}>
-            <Line options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }} data={dataLinha} />
+      <div className="atlas-grid" style={{ gridTemplateColumns: '2fr 1fr', gap: '20px', marginBottom: '20px' }}>
+        {/* GRÁFICO DE LINHA */}
+        <div className="atlas-card">
+          <div className="card-titulo">Desempenho da Semana (Venda vs Lucro)</div>
+          <div style={{ height: '300px' }}>
+            <Line
+              data={dataLinha}
+              options={{
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { position: 'top' } }
+              }}
+            />
           </div>
         </div>
 
-        <div className="atlas-card" style={{ flex: 1 }}>
-          <div className="card-titulo">Receita por Categoria</div>
-          <div style={{ height: '250px', display: 'flex', justifyContent: 'center' }}>
+        {/* RECEITA POR CATEGORIA */}
+        <div className="atlas-card">
+          <div className="card-titulo">Vendas por Categoria</div>
+          <div style={{ height: '300px', display: 'flex', alignItems: 'center' }}>
             {Object.keys(vendasPorCategoria).length > 0 ? (
-              <Doughnut options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { boxWidth: 12 } } } }} data={dataRosca} />
+              <Doughnut data={dataRosca} options={{ responsive: true, maintainAspectRatio: false }} />
             ) : (
-              <p className="texto-cinza-vazio">Sem dados de vendas.</p>
+              <p className="texto-cinza-vazio">Sem vendas registradas.</p>
             )}
           </div>
         </div>
       </div>
 
-      <div className="atlas-grid" style={{ gridTemplateColumns: 'repeat(2, 1fr)', marginBottom: '20px' }}>
+      <div className="atlas-grid" style={{ gridTemplateColumns: 'repeat(3, 1fr)', gap: '20px' }}>
+        {/* RANKING MAIS VENDIDOS */}
         <div className="atlas-card">
-          <div className="card-titulo" style={{ color: '#16a34a' }}>Top 5 Mais Vendidos (Sucesso)</div>
-          <div style={{ height: '220px', display: 'flex', justifyContent: 'center' }}>
-            {topProdutos.length > 0 ? (
-              <Bar options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }} data={dataBarraMelhores} />
-            ) : (
-              <p className="texto-cinza-vazio">Sem dados suficientes.</p>
-            )}
-          </div>
-        </div>
-
-        <div className="atlas-card">
-          <div className="card-titulo" style={{ color: '#e11d48' }}>Top 5 Menos Vendidos (Abaixo da Media)</div>
-          <div style={{ height: '220px', display: 'flex', justifyContent: 'center' }}>
-            {pioresProdutos.length > 0 ? (
-              <Bar options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }} data={dataBarraPiores} />
-            ) : (
-              <p className="texto-cinza-vazio">Sem dados suficientes.</p>
-            )}
-          </div>
-        </div>
-      </div>
-
-      <div className="atlas-grid" style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}>
-        
-        <div className="atlas-card">
-          <div className="card-titulo">Todas as Vendas Realizadas</div>
-          <div style={{ overflowY: 'auto', maxHeight: '300px', paddingRight: '5px' }}>
-            {/* Removi o limitador, mostra todo o histórico rolável */}
-            {historicoVendas.map(venda => (
-              <div key={venda.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid #f1f5f9' }}>
-                <div>
-                  <div style={{ fontWeight: 'bold', fontSize: '13px', color: '#0f172a' }}>{venda.produto_nome.length > 20 ? venda.produto_nome.substring(0, 20) + '...' : venda.produto_nome}</div>
-                  <div style={{ fontSize: '11px', color: '#64748b' }}>VD-{String(venda.numero_venda).padStart(4, '0')} | {new Date(venda.created_at).toLocaleTimeString('pt-BR')}</div>
-                </div>
-                <div style={{ fontWeight: 'bold', color: '#16a34a', fontSize: '13px' }}>
-                  R$ {Number(venda.valor_total).toFixed(2)}
-                </div>
+          <div className="card-titulo" style={{ color: '#16a34a' }}>Top 5 Mais Vendidos</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '10px' }}>
+            {topProdutos.map((p, idx) => (
+              <div key={`top-${idx}`} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px', background: '#f0fdf4', borderRadius: '8px', border: '1px solid #bbf7d0' }}>
+                <span className="bold font-14">#{idx + 1} {p.nome.length > 18 ? p.nome.substring(0, 18) + '...' : p.nome}</span>
+                <span className="badge-azul" style={{ background: '#16a34a', color: 'white', padding: '4px 8px', borderRadius: '4px', fontSize: '12px' }}>{p.qtd} saídas</span>
               </div>
             ))}
-            {historicoVendas.length === 0 && <p className="texto-cinza-vazio" style={{marginTop:'30px'}}>Nenhuma venda registrada.</p>}
+            {topProdutos.length === 0 && <p className="texto-cinza-vazio">Nenhum dado disponível.</p>}
           </div>
         </div>
 
+        {/* RANKING MENOS VENDIDOS */}
         <div className="atlas-card">
-          <div className="card-titulo" style={{ color: '#ea580c' }}>Atenção: Estoque Baixo</div>
-          <div style={{ overflowY: 'auto', maxHeight: '300px', paddingRight: '5px' }}>
-            {/* Lista completa de itens em alerta */}
-            {itensFiltroAlerta.map(item => (
-              <div key={item.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px', background: '#fffbeb', borderRadius: '6px', marginBottom: '8px', border: '1px solid #fde68a' }}>
-                <div>
-                  <div style={{ fontWeight: 'bold', fontSize: '13px', color: '#b45309' }}>{item.nome}</div>
-                  <div style={{ fontSize: '11px', color: '#d97706' }}>SKU: {item.sku}</div>
-                </div>
-                <div style={{ fontWeight: 'bold', color: '#d97706', fontSize: '14px' }}>
-                  {item.quantidade} un
-                </div>
+          <div className="card-titulo" style={{ color: '#e11d48' }}>Alerta: Baixo Giro (Inativos)</div>
+          <p className="font-11 texto-cinza mb-10">Itens com saldo em prateleira, mas com zero ou poucas saídas.</p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            {pioresProdutos.map((p, idx) => (
+              <div key={`worst-${idx}`} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px', background: '#fff1f2', borderRadius: '8px', border: '1px solid #fecdd3' }}>
+                <span className="bold font-14" style={{ color: '#9f1239' }}>#{idx + 1} {p.nome.length > 18 ? p.nome.substring(0, 18) + '...' : p.nome}</span>
+                <span style={{ background: '#e11d48', color: 'white', padding: '4px 8px', borderRadius: '4px', fontSize: '12px', fontWeight: 'bold' }}>{p.qtd} saídas</span>
               </div>
             ))}
-            {itensFiltroAlerta.length === 0 && (
-              <div style={{ padding: '20px', textAlign: 'center', background: '#f0fdf4', borderRadius: '6px', color: '#15803d', border: '1px solid #bbf7d0', marginTop: '20px' }}>
-                <strong>Estoque Saudavel!</strong>
-              </div>
-            )}
+            {pioresProdutos.length === 0 && <p className="texto-cinza-vazio">Estoque girando 100%!</p>}
           </div>
         </div>
 
+        {/* ALERTAS CRÍTICOS */}
         <div className="atlas-card">
-          <div className="card-titulo" style={{ color: '#e11d48' }}>Radar de Encalhe Geral</div>
-          <div style={{ overflowY: 'auto', maxHeight: '300px', paddingRight: '5px' }}>
-            {/* Lista completa de encalhados */}
-            {produtosParados.map(item => (
-              <div key={`enc-${item.id}`} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px', background: '#fff1f2', borderRadius: '6px', marginBottom: '8px', border: '1px solid #fecdd3' }}>
-                <div>
-                  <div style={{ fontWeight: 'bold', fontSize: '13px', color: '#be123c' }}>{item.nome.length > 20 ? item.nome.substring(0,20)+'...' : item.nome}</div>
-                  <div style={{ fontSize: '11px', color: '#9f1239' }}>Estoque: {item.quantidade} un</div>
-                </div>
-                <div style={{ fontWeight: 'bold', color: '#e11d48', fontSize: '12px', textAlign: 'right' }}>
-                  Ultima saida:<br/>{item.textoUltima}
-                </div>
-              </div>
-            ))}
-            {produtosParados.length === 0 && (
-              <div style={{ padding: '20px', textAlign: 'center', background: '#f0fdf4', borderRadius: '6px', color: '#15803d', border: '1px solid #bbf7d0', marginTop: '20px' }}>
-                <strong>Giro Perfeito!</strong><br/>Tudo foi vendido recentemente.
+          <div className="card-titulo" style={{ color: '#d97706' }}>Alertas e Insights</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '10px' }}>
+            {itensAlerta > 0 && (
+              <div style={{ padding: '10px', background: '#fffbeb', borderLeft: '4px solid #f59e0b', borderRadius: '4px', fontSize: '13px' }}>
+                <strong style={{ color: '#b45309' }}>🚨 Reposição:</strong> Você tem {itensAlerta} produtos precisando de compra urgente.
               </div>
             )}
+            {totalDespesas > (faturamentoBruto * 0.2) && (
+              <div style={{ padding: '10px', background: '#fef2f2', borderLeft: '4px solid #ef4444', borderRadius: '4px', fontSize: '13px' }}>
+                <strong style={{ color: '#b91c1c' }}>⚠️ Custos Altos:</strong> Suas despesas ultrapassaram 20% do faturamento. Revise as avarias.
+              </div>
+            )}
+            <div style={{ padding: '10px', background: '#f0f9ff', borderLeft: '4px solid #0ea5e9', borderRadius: '4px', fontSize: '13px' }}>
+              <strong style={{ color: '#0369a1' }}>💡 Dica de Venda:</strong> Tente criar um "Combo" juntando o seu mais vendido ({topProdutos[0]?.nome || 'Item Top'}) com o encalhado nº 1 ({pioresProdutos[0]?.nome || 'Item Parado'}).
+            </div>
           </div>
         </div>
-
       </div>
     </div>
   );

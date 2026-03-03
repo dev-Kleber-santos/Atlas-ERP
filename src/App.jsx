@@ -63,7 +63,7 @@ export default function App() {
 
   const menuBase = [
     { nome: 'Inicio', filhos: ['Dashboard'] },
-    { nome: 'Produtos', filhos: ['Consultar Itens', 'Cadastro de Item', 'Categorias'] },
+    { nome: 'Produtos', filhos: ['Consultar Itens', 'Cadastro de Item', 'Categorias', 'Promocoes'] },
     { nome: 'Estoque & Logistica', filhos: ['Entradas', 'Saidas', 'Ajustes', 'Log de Estoque'] },
     { nome: 'Gestao de Compras', filhos: ['Sugestoes de Compras', 'Cotacoes', 'Pedidos', 'Fornecedores'] },
     { nome: 'Vendas & PDV', filhos: ['Vendas', 'Devolucoes', 'Controle de Caixa'] },
@@ -73,7 +73,6 @@ export default function App() {
     { nome: 'Configuracoes', filhos: ['Gerenciar Usuarios'] }
   ];
 
-  // FILTRO DE ACESSO (3 NIVEIS: Admin, Gerente, Caixa)
   const itensMenu = menuBase.filter(categoria => {
     if (usuarioRole === 'admin') return true;
     if (usuarioRole === 'gerente') {
@@ -169,111 +168,283 @@ export default function App() {
 
   const realizarLogoff = () => { setIsLoggedIn(false); setInputUser(''); setInputPass(''); setTelaAtiva('inicio'); setUsuarioRole(''); setCaixaAtivo(null); };
 
-  const TelaBloqueada = () => (<div className="tela-bloqueada"><h2 className="titulo-escuro">Acesso Restrito</h2><p className="texto-cinza">O seu nivel de usuario ({usuarioRole}) nao tem permissao para visualizar esta tela.</p></div>);
+  const TelaBloqueada = () => (<div className="tela-bloqueada"><h2 className="titulo-escuro">Acesso Restrito</h2><p className="texto-cinza">O seu nível de usuário ({usuarioRole}) não tem permissão para visualizar esta tela.</p></div>);
   const maskCNPJ = (value) => value.replace(/\D/g, '').replace(/^(\d{2})(\d)/, '$1.$2').replace(/^(\d{2})\.(\d{3})(\d)/, '$1.$2.$3').replace(/\.(\d{3})(\d)/, '.$1/$2').replace(/(\d{4})(\d)/, '$1-$2').slice(0, 18);
   const maskCPF = (value) => value.replace(/\D/g, '').replace(/(\d{3})(\d)/, '$1.$2').replace(/(\d{3})(\d)/, '$1.$2').replace(/(\d{3})(\d{1,2})$/, '$1-$2').slice(0, 14);
   const maskTelefone = (value) => value.replace(/\D/g, '').replace(/^(\d{2})(\d)/g, '($1) $2').replace(/(\d)(\d{4})$/, '$1-$2').slice(0, 15);
   const manipularUpload = (e) => { if (e.target.files[0]) setImagemAnexada(URL.createObjectURL(e.target.files[0])); };
-  const adicionarLinha = () => setLinhasItens([...linhasItens, { id: Date.now(), qtd: 0, valor: 0, vlrA: 0, vlrB: 0, vlrC: 0 }]);
-  const removerLinha = (id) => { if (linhasItens.length > 1 && window.confirm("Confirmar remocao do item?")) setLinhasItens(linhasItens.filter(l => l.id !== id)); };
-  const atualizarValorLinha = (id, campo, valor) => setLinhasItens(linhasItens.map(linha => linha.id === id ? { ...linha, [campo]: (campo === 'qtd' || campo === 'valor' || campo === 'vlrA' || campo === 'vlrB' || campo === 'vlrC') ? Number(valor) : valor } : linha));
+  const adicionarLinha = () => setLinhasItens([...linhasItens, { id: Date.now(), qtd: 0, valor: 0, vlrA: '', vlrB: 0, vlrC: 0 }]);
+  const removerLinha = (id) => {
+    if (linhasItens.length > 1) {
+      setLinhasItens(linhasItens.filter(l => l.id !== id));
+      toast.info("Linha removida.");
+    } else {
+      toast.warn("A nota precisa ter pelo menos um item.");
+    }
+  };
+  const atualizarValorLinha = (id, campo, valor) => setLinhasItens(linhasItens.map(linha => linha.id === id ? { ...linha, [campo]: (campo === 'qtd' || campo === 'valor' || campo === 'vlrB' || campo === 'vlrC') ? Number(valor) : valor } : linha));
 
   const confirmarEntradaComPendencia = async () => {
     const subtotal = linhasItens.reduce((acc, item) => acc + (Number(item.qtd || 0) * Number(item.valor || 0)), 0);
-    const fornNF = document.getElementById('forn-entrada')?.value || 'Nao informado'; const cnpjNF = document.getElementById('cnpj-entrada')?.value || ''; const dataNF = document.getElementById('data-entrada')?.value || new Date().toISOString().split('T')[0];
+    const fornNF = document.getElementById('forn-entrada')?.value?.trim() || 'Nao informado';
+    const cnpjNF = document.getElementById('cnpj-entrada')?.value?.trim() || '';
+    const emailNF = document.getElementById('email-entrada')?.value?.trim() || '';
+    const telNF = document.getElementById('tel-entrada')?.value?.trim() || '';
+    const dataNF = document.getElementById('data-entrada')?.value || new Date().toISOString().split('T')[0];
+
+    if (fornNF !== 'Nao informado' && cnpjNF) {
+      const fornecedorExiste = listaFornecedores.find(f =>
+        f.cnpj === cnpjNF || f.razao.toUpperCase() === fornNF.toUpperCase()
+      );
+
+      if (!fornecedorExiste) {
+        const { error } = await supabase.from('fornecedores').insert([{
+          razao: fornNF,
+          cnpj: cnpjNF,
+          email: emailNF,
+          telefone: telNF,
+          status: 'Ativo'
+        }]);
+
+        if (!error) {
+          buscarFornecedoresReal();
+          toast.success(`Novo fornecedor "${fornNF}" salvo na sua base de dados!`);
+        }
+      }
+    }
+
     if (subtotal > 0) { await supabase.from('despesas').insert([{ descricao: `Entrada Mercadoria - NF: ${cnpjNF || 'S/N'}`, fornecedor: fornNF, valor_total: subtotal, tipo: 'COMPRA_ESTOQUE' }]); buscarDespesasReal(); }
     if (fornNF !== 'Nao informado' || cnpjNF || subtotal > 0) { await supabase.from('notas_fiscais').insert([{ fornecedor: fornNF, cnpj: cnpjNF, data_emissao: dataNF, valor_total: subtotal }]); buscarNotasReal(); }
     if (linhasItens.length > 0 && linhasItens[0].nome_temp) { const novosPendentes = linhasItens.map(l => ({ nome: l.nome_temp || 'Sem nome', quantidade: Number(l.qtd || 0), custo_unitario: Number(l.valor || 0), fornecedor: fornNF })); await supabase.from('itens_pendentes').insert(novosPendentes); buscarPendenciasReal(); }
-    setValorTotalEntradas(prev => prev + subtotal); toast.success("Entrada registrada com sucesso!"); setLinhasItens([{ id: Date.now(), qtd: 0, valor: 0, vlrA: 0, vlrB: 0, vlrC: 0 }]); setImagemAnexada(null);
+
+    setValorTotalEntradas(prev => prev + subtotal); toast.success("Entrada registrada com sucesso!");
+    setLinhasItens([{ id: Date.now(), qtd: 0, valor: 0, vlrA: '', vlrB: 0, vlrC: 0 }]);
+    setImagemAnexada(null);
+
+    if (document.getElementById('forn-entrada')) document.getElementById('forn-entrada').value = '';
+    if (document.getElementById('cnpj-entrada')) document.getElementById('cnpj-entrada').value = '';
+    if (document.getElementById('email-entrada')) document.getElementById('email-entrada').value = '';
+    if (document.getElementById('tel-entrada')) document.getElementById('tel-entrada').value = '';
   };
 
   const registrarSaidasAvulsas = async () => {
     const itensValidos = linhasItens.filter(l => l.nome_temp && l.qtd > 0);
     if (itensValidos.length === 0) return toast.error("Selecione um produto e a quantidade.");
+
     let processados = 0;
+    let valorPerdaTotal = 0;
+
     for (const item of itensValidos) {
       const produtoDb = estoque.find(i => i.id === item.nome_temp);
-      if (!produtoDb || produtoDb.quantidade < item.qtd) { toast.error(`Estoque insuficiente: ${produtoDb?.nome || 'Item'}`); continue; }
-      const novaQtd = Number(produtoDb.quantidade) - Number(item.qtd); const motivoBaixa = item.vlrA || 'Motivo Nao Especificado';
+      if (!produtoDb || produtoDb.quantidade < item.qtd) {
+        toast.error(`Estoque insuficiente: ${produtoDb?.nome || 'Item'}`);
+        continue;
+      }
+
+      const novaQtd = Number(produtoDb.quantidade) - Number(item.qtd);
+      const motivoBaixa = item.vlrA || 'Outros';
+
+      const custoPerda = (Number(produtoDb.custo_base || 0) * Number(item.qtd));
+
       await supabase.from('estoque').update({ quantidade: novaQtd }).eq('id', produtoDb.id);
       await supabase.from('saidas').insert([{ produto_id: produtoDb.id, produto_nome: produtoDb.nome, quantidade: item.qtd, motivo: motivoBaixa }]);
       await supabase.from('log_movimentacao').insert([{ produto_id: produtoDb.id, produto_nome: produtoDb.nome, tipo_movimentacao: 'SAIDA_AVULSA', quantidade_alterada: -item.qtd, usuario: usuarioAtual, observacao: `Motivo: ${motivoBaixa}` }]);
+
+      if (['Avaria / Quebra', 'Vencimento / Validade', 'Perda / Furto', 'Uso Interno'].includes(motivoBaixa)) {
+        valorPerdaTotal += custoPerda;
+      }
       processados++;
     }
-    if (processados > 0) { toast.success(`Baixa registrada.`); buscarEstoqueReal(); buscarLogReal(); setLinhasItens([{ id: Date.now(), qtd: 0, valor: 0, vlrA: 0, vlrB: 0, vlrC: 0 }]); }
+
+    if (valorPerdaTotal > 0) {
+      await supabase.from('despesas').insert([{
+        descricao: `Baixa de Estoque (Perdas/Avarias/Consumo)`,
+        fornecedor: 'Estoque Interno',
+        valor_total: valorPerdaTotal,
+        tipo: 'PERDA_ESTOQUE'
+      }]);
+      buscarDespesasReal();
+    }
+
+    if (processados > 0) {
+      toast.success(`Baixa registrada com sucesso.`);
+      buscarEstoqueReal();
+      buscarLogReal();
+      setLinhasItens([{ id: Date.now(), qtd: 0, valor: 0, vlrA: '', vlrB: 0, vlrC: 0 }]);
+    }
   };
 
-  const prepararAceite = (item) => { document.getElementById('nome-item').value = item.nome; document.getElementById('qtd-item').value = item.quantidade; document.getElementById('sku-item').value = ''; setItemEmEdicao(item); toast.info("Preencha o SKU e Categoria."); };
-  const cancelarPendencia = async (id) => { if (window.confirm("Confirmar exclusao?")) { await supabase.from('itens_pendentes').delete().eq('id', id); buscarPendenciasReal(); if (itemEmEdicao?.id === id) setItemEmEdicao(null); toast.info("Item descartado."); } };
+  const realizarAjusteEstoque = async () => {
+    const idItem = document.getElementById('sel-ajuste').value;
+    const qtdAjuste = Number(document.getElementById('qtd-ajuste').value);
+    if (!idItem || !qtdAjuste) return toast.error("Preencha todos os campos antes de ajustar.");
+    const itemAtual = estoque.find(i => i.id === idItem);
+    if (!itemAtual) return toast.error("Produto não encontrado no estoque.");
 
-  // ==========================================
-  // NOVA LOGICA DE UPLOAD DE IMAGEM NO CADASTRO
-  // ==========================================
+    const novaQuantidade = document.getElementById('tipo-ajuste').value === 'entrada'
+      ? Number(itemAtual.quantidade) + qtdAjuste
+      : Number(itemAtual.quantidade) - qtdAjuste;
+
+    await supabase.from('estoque').update({ quantidade: novaQuantidade }).eq('id', idItem);
+    await supabase.from('log_movimentacao').insert([{ produto_id: idItem, produto_nome: itemAtual.nome, tipo_movimentacao: 'AJUSTE', quantidade_alterada: document.getElementById('tipo-ajuste').value === 'entrada' ? qtdAjuste : -qtdAjuste, usuario: usuarioAtual, observacao: 'Ajuste manual' }]);
+
+    buscarLogReal();
+    setEstoque(estoque.map(i => i.id === idItem ? { ...i, quantidade: novaQuantidade } : i));
+    toast.success("Ajuste realizado com sucesso.");
+
+    document.getElementById('qtd-ajuste').value = '';
+    document.getElementById('sel-ajuste').value = '';
+  };
+
+  const prepararAceite = (item) => {
+    document.getElementById('nome-item').value = item.nome;
+    document.getElementById('qtd-item').value = item.quantidade;
+    document.getElementById('custo-item').value = item.custo_unitario || '';
+    document.getElementById('fornecedor-item').value = item.fornecedor || '';
+
+    const itemExistente = estoque.find(i => i.nome.trim().toUpperCase() === item.nome.trim().toUpperCase());
+
+    if (itemExistente) {
+      document.getElementById('sku-item').value = itemExistente.sku;
+      document.getElementById('codigo-barra-item').value = itemExistente.codigo_barra || '';
+      document.getElementById('categoria-item').value = itemExistente.categoria || '';
+      document.getElementById('ncm-item').value = itemExistente.ncm || '';
+      document.getElementById('cest-item').value = itemExistente.cest || '';
+      document.getElementById('venda-item').value = itemExistente.valor_venda || '';
+
+      const custoAntigo = Number(itemExistente.custo_base || 0);
+      const custoNovo = Number(item.custo_unitario || 0);
+
+      if (custoNovo > custoAntigo && custoAntigo > 0) {
+        toast.warn(`⚠️ ALERTA: O custo subiu de R$ ${custoAntigo.toFixed(2)} para R$ ${custoNovo.toFixed(2)}! Reajuste seu Preço de Venda antes de salvar.`, { autoClose: 7000 });
+      } else if (custoNovo < custoAntigo && custoNovo > 0) {
+        toast.info(`Ótimo! O custo caiu de R$ ${custoAntigo.toFixed(2)} para R$ ${custoNovo.toFixed(2)}. A margem de lucro aumentou.`);
+      } else {
+        toast.info("Produto reconhecido! Ficha técnica carregada.");
+      }
+    } else {
+      document.getElementById('sku-item').value = '';
+      document.getElementById('codigo-barra-item').value = '';
+      document.getElementById('categoria-item').value = '';
+      document.getElementById('venda-item').value = '';
+      toast.info("Produto novo! Gere o SKU e defina a Categoria.");
+    }
+
+    setItemEmEdicao(item);
+  };
+
+  const cancelarPendencia = async (id) => {
+    await supabase.from('itens_pendentes').delete().eq('id', id);
+    buscarPendenciasReal();
+    if (itemEmEdicao?.id === id) setItemEmEdicao(null);
+    toast.info("Item descartado da fila de pendentes.");
+  };
+
   const salvarCadastroItem = async () => {
-    const nome = document.getElementById('nome-item').value;
+    const nome = document.getElementById('nome-item').value.trim();
     const categoria = document.getElementById('categoria-item').value;
     const qtd = Number(document.getElementById('qtd-item').value);
-    const sku = document.getElementById('sku-item').value;
-    const codigo_barra = document.getElementById('codigo-barra-item')?.value || '';
+    const sku = document.getElementById('sku-item').value.trim();
+    const codigo_barra = document.getElementById('codigo-barra-item')?.value.trim() || '';
     const ncm = document.getElementById('ncm-item')?.value || '';
     const cest = document.getElementById('cest-item')?.value || '';
     const origem = document.getElementById('origem-item')?.value || '0';
     const ipi = Number(document.getElementById('ipi-item')?.value || 0);
+    const custo_base = Number(document.getElementById('custo-item')?.value || 0);
+    const valor_venda = Number(document.getElementById('venda-item')?.value || 0);
+    const estoque_minimo = Number(document.getElementById('minimo-item').value);
+    const fornecedor_padrao = document.getElementById('fornecedor-item')?.value || '';
 
-    // Pega o arquivo do input
     const inputArquivo = document.getElementById('imagem-produto-upload');
     const arquivoImagem = inputArquivo ? inputArquivo.files[0] : null;
 
-    if (!nome || !sku || !categoria) return toast.error("Nome, Categoria e SKU obrigatorios.");
+    if (!nome || !sku || !categoria) return toast.error("Nome, Categoria e SKU obrigatórios.");
 
-    let url_imagem = null;
+    const formSku = sku.toUpperCase();
+    const formNome = nome.toUpperCase();
+    const formBarra = codigo_barra;
+
+    const itemMesmoProduto = estoque.find(i => {
+      const dbNome = String(i.nome || '').trim().toUpperCase();
+      const dbBarra = String(i.codigo_barra || '').trim();
+      return (dbNome === formNome && formNome !== '') || (dbBarra === formBarra && formBarra !== '');
+    });
+
+    let url_imagem = itemMesmoProduto ? itemMesmoProduto.url_imagem : null;
 
     if (arquivoImagem) {
       toast.info("Imagem detectada! Iniciando upload...");
       const fileExt = arquivoImagem.name.split('.').pop();
       const fileName = `prod_${Date.now()}.${fileExt}`;
-
       const { error: uploadError } = await supabase.storage.from('produtos').upload(fileName, arquivoImagem);
 
-      if (uploadError) {
-        console.error("Erro do Supabase:", uploadError);
-        return toast.error("Erro no Storage: " + uploadError.message);
-      }
+      if (uploadError) return toast.error("Erro no Storage: " + uploadError.message);
 
       const { data: publicUrlData } = supabase.storage.from('produtos').getPublicUrl(fileName);
       url_imagem = publicUrlData.publicUrl;
-      toast.success("Foto salva na nuvem com sucesso!");
+    }
+
+    if (itemMesmoProduto) {
+      const novaQtd = Number(itemMesmoProduto.quantidade) + qtd;
+
+      const { error } = await supabase.from('estoque').update({
+        quantidade: novaQtd,
+        custo_base: custo_base > 0 ? custo_base : itemMesmoProduto.custo_base,
+        valor_venda: valor_venda > 0 ? valor_venda : itemMesmoProduto.valor_venda,
+        url_imagem: url_imagem
+      }).eq('id', itemMesmoProduto.id);
+
+      if (error) return toast.error("Erro ao unificar o estoque: " + error.message);
+
+      await supabase.from('log_movimentacao').insert([{
+        produto_id: itemMesmoProduto.id,
+        produto_nome: itemMesmoProduto.nome,
+        tipo_movimentacao: 'REPOSICAO_COMPRA',
+        quantidade_alterada: qtd,
+        usuario: usuarioAtual,
+        observacao: 'Item unificado via Cadastro/Pendência'
+      }]);
+      buscarLogReal();
+
+      if (itemEmEdicao) {
+        await supabase.from('itens_pendentes').delete().eq('id', itemEmEdicao.id);
+        buscarPendenciasReal(); setItemEmEdicao(null);
+      }
+
+      setEstoque(estoque.map(i => i.id === itemMesmoProduto.id ? {
+        ...i, quantidade: novaQtd, custo_base: custo_base > 0 ? custo_base : i.custo_base, valor_venda: valor_venda > 0 ? valor_venda : i.valor_venda, url_imagem
+      } : i));
+
+      toast.success(`Produto já existia! Estoque unificado. Novo saldo: ${novaQtd} un.`);
+
     } else {
-      toast.warn("Nenhuma foto selecionada. Salvando sem imagem.");
+      const skuEmUso = estoque.find(i => String(i.sku || '').trim().toUpperCase() === formSku);
+
+      if (skuEmUso) {
+        return toast.error(`⚠️ ALERTA: O SKU "${sku}" já pertence ao produto "${skuEmUso.nome}". Por favor, gere um SKU diferente.`);
+      }
+
+      const novoItemBD = {
+        sku, nome, categoria, quantidade: qtd, estoque_minimo, fornecedor_padrao,
+        custo_base, valor_venda, status: 'ativo', codigo_barra, ncm, cest, origem, ipi, url_imagem
+      };
+
+      const { data, error } = await supabase.from('estoque').insert([novoItemBD]).select();
+
+      if (error) return toast.error("Erro ao salvar no banco: " + error.message);
+
+      await supabase.from('log_movimentacao').insert([{ produto_id: data[0].id, produto_nome: nome, tipo_movimentacao: 'CADASTRO_INICIAL', quantidade_alterada: qtd, usuario: usuarioAtual }]);
+      buscarLogReal();
+
+      if (itemEmEdicao) {
+        await supabase.from('itens_pendentes').delete().eq('id', itemEmEdicao.id);
+        buscarPendenciasReal(); setItemEmEdicao(null);
+      }
+
+      setEstoque([...estoque, data[0]]);
+      toast.success("Novo item cadastrado com sucesso!");
     }
 
-    // Salvando no banco de dados
-    const novoItemBD = {
-      sku, nome, categoria, quantidade: qtd,
-      estoque_minimo: Number(document.getElementById('minimo-item').value),
-      fornecedor_padrao: document.getElementById('fornecedor-item')?.value || '',
-      custo_base: Number(document.getElementById('custo-item')?.value || 0),
-      valor_venda: Number(document.getElementById('venda-item')?.value || 0),
-      status: 'ativo', codigo_barra, ncm, cest, origem, ipi,
-      url_imagem // Link que acabamos de gerar
-    };
-
-    const { data, error } = await supabase.from('estoque').insert([novoItemBD]).select();
-
-    if (error) return toast.error("Erro ao salvar no banco: " + error.message);
-
-    await supabase.from('log_movimentacao').insert([{ produto_id: data[0].id, produto_nome: nome, tipo_movimentacao: 'CADASTRO_INICIAL', quantidade_alterada: qtd, usuario: usuarioAtual }]);
-    buscarLogReal();
-
-    if (itemEmEdicao) {
-      await supabase.from('itens_pendentes').delete().eq('id', itemEmEdicao.id);
-      buscarPendenciasReal(); setItemEmEdicao(null);
-    }
-
-    setEstoque([...estoque, data[0]]);
-    toast.success("Item cadastrado com sucesso!");
-
-    // Limpando o formulário
     document.getElementById('nome-item').value = ''; document.getElementById('sku-item').value = ''; document.getElementById('categoria-item').value = ''; document.getElementById('codigo-barra-item').value = ''; document.getElementById('ncm-item').value = ''; document.getElementById('cest-item').value = ''; document.getElementById('origem-item').value = '0'; document.getElementById('ipi-item').value = '0'; document.getElementById('qtd-item').value = '0'; document.getElementById('minimo-item').value = '5'; document.getElementById('fornecedor-item').value = ''; document.getElementById('custo-item').value = ''; document.getElementById('venda-item').value = '';
     if (inputArquivo) inputArquivo.value = '';
   };
@@ -322,27 +493,40 @@ export default function App() {
     if (imprimirRecibo) { gerarReciboVendaDiretaPDF(carrinho, clienteCompleto, numeroDestaVenda, valorTotalVenda); }
   };
 
-  const realizarAjusteEstoque = async () => {
-    const idItem = document.getElementById('sel-ajuste').value; const qtdAjuste = Number(document.getElementById('qtd-ajuste').value);
-    if (!idItem || !qtdAjuste) return toast.error("Preencha todos os campos antes de ajustar.");
-    const itemAtual = estoque.find(i => i.id === idItem); if (!itemAtual) return toast.error("Produto nao encontrado no estoque.");
-    const novaQuantidade = document.getElementById('tipo-ajuste').value === 'entrada' ? Number(itemAtual.quantidade) + qtdAjuste : Number(itemAtual.quantidade) - qtdAjuste;
-    await supabase.from('estoque').update({ quantidade: novaQuantidade }).eq('id', idItem);
-    await supabase.from('log_movimentacao').insert([{ produto_id: idItem, produto_nome: itemAtual.nome, tipo_movimentacao: 'AJUSTE', quantidade_alterada: document.getElementById('tipo-ajuste').value === 'entrada' ? qtdAjuste : -qtdAjuste, usuario: usuarioAtual, observacao: 'Ajuste manual' }]);
-    buscarLogReal(); setEstoque(estoque.map(i => i.id === idItem ? { ...i, quantidade: novaQuantidade } : i)); toast.success("Ajuste realizado com sucesso."); document.getElementById('qtd-ajuste').value = '';
-  };
-
   const registrarDevolucao = async (carrinho, cliente, motivo, numeroVendaRef, dataVendaRef) => {
-    let valorTotalEstornado = 0; let novoEstoque = [...estoque];
+    let valorTotalEstornado = 0;
+    let novoEstoque = [...estoque];
+
+    const isAvaria = motivo.includes('[AVARIA]');
+
     for (const item of carrinho) {
       valorTotalEstornado += item.subtotal;
       await supabase.from('devolucoes').insert([{ produto_id: item.id, produto_nome: item.nome, quantidade: item.quantidade, valor_estornado: item.subtotal, cliente: cliente, motivo: motivo, numero_venda_ref: Number(numeroVendaRef), data_venda: dataVendaRef }]);
-      const produtoIndex = novoEstoque.findIndex(i => i.id === item.id);
-      if (produtoIndex !== -1) { const novaQtd = Number(novoEstoque[produtoIndex].quantidade) + Number(item.quantidade); novoEstoque[produtoIndex] = { ...novoEstoque[produtoIndex], quantidade: novaQtd }; await supabase.from('estoque').update({ quantidade: novaQtd }).eq('id', item.id); }
-      await supabase.from('log_movimentacao').insert([{ produto_id: item.id, produto_nome: item.nome, tipo_movimentacao: 'DEVOLUCAO', quantidade_alterada: item.quantidade, usuario: usuarioAtual, observacao: `Motivo: ${motivo} (Ref: VD-${numeroVendaRef})` }]);
+
+      if (!isAvaria) {
+        const produtoIndex = novoEstoque.findIndex(i => i.id === item.id);
+        if (produtoIndex !== -1) {
+          const novaQtd = Number(novoEstoque[produtoIndex].quantidade) + Number(item.quantidade);
+          novoEstoque[produtoIndex] = { ...novoEstoque[produtoIndex], quantidade: novaQtd };
+          await supabase.from('estoque').update({ quantidade: novaQtd }).eq('id', item.id);
+        }
+        await supabase.from('log_movimentacao').insert([{ produto_id: item.id, produto_nome: item.nome, tipo_movimentacao: 'DEVOLUCAO', quantidade_alterada: item.quantidade, usuario: usuarioAtual, observacao: `Retorno ao estoque. Motivo: ${motivo} (Ref: VD-${numeroVendaRef})` }]);
+      } else {
+        await supabase.from('log_movimentacao').insert([{ produto_id: item.id, produto_nome: item.nome, tipo_movimentacao: 'DEVOLUCAO_AVARIA', quantidade_alterada: 0, usuario: usuarioAtual, observacao: `Devolvido com Avaria (Lixo/Descarte). Não retornou ao saldo. (Ref: VD-${numeroVendaRef})` }]);
+      }
     }
-    if (valorTotalEstornado > 0) { await supabase.from('despesas').insert([{ descricao: `Estorno - Venda VD-${numeroVendaRef}`, fornecedor: 'Interno', valor_total: valorTotalEstornado, tipo: 'ESTORNO_VENDA' }]); }
-    setEstoque(novoEstoque); buscarLogReal(); buscarDespesasReal(); buscarDevolucoesReal(); toast.success(`Estorno processado com sucesso.`);
+
+    if (valorTotalEstornado > 0) {
+      await supabase.from('despesas').insert([{ descricao: `Estorno - Venda VD-${numeroVendaRef}`, fornecedor: 'Interno', valor_total: valorTotalEstornado, tipo: 'ESTORNO_VENDA' }]);
+    }
+
+    setEstoque(novoEstoque); buscarLogReal(); buscarDespesasReal(); buscarDevolucoesReal();
+
+    if (isAvaria) {
+      toast.error(`Dinheiro estornado. Atenção: Os itens NÃO voltaram ao estoque (Avaria).`);
+    } else {
+      toast.success(`Estorno processado e itens voltaram à prateleira com sucesso!`);
+    }
   };
 
   const gerarReciboDevolucaoPDF = (carrinho, cliente, motivo, numeroVendaRef, dataVendaRef, total) => {
@@ -397,15 +581,76 @@ export default function App() {
   const converterCotacaoEmPedido = async (cotacao) => { const valores = [{ forn: cotacao.fornBase || 'Base', vlr: cotacao.vlrA }, { forn: 'Opcao B', vlr: cotacao.vlrB }, { forn: 'Opcao C', vlr: cotacao.vlrC }].filter(v => v.vlr > 0); if (valores.length === 0) return toast.error("Registre um valor financeiro."); const vencedor = valores.reduce((prev, curr) => (curr.vlr < prev.vlr ? curr : prev)); await supabase.from('pedidos_compra').insert([{ protocolo: `PED-${Math.floor(1000 + Math.random() * 9000)}`, fornecedor: vencedor.forn, produto: cotacao.produto || cotacao.nome_temp, qtd: cotacao.qtd, unitario: vencedor.vlr, subtotal: cotacao.qtd * vencedor.vlr, data: new Date().toISOString().split('T')[0] }]); if (!cotacao.isManual) { await supabase.from('cotacoes').delete().eq('id', cotacao.id); buscarCotacoesReal(); } buscarPedidosReal(); toast.success(`Pedido de compra aprovado.`); setTelaAtiva('pedidos'); };
 
   const criarEBaixarExcelEstilizado = async (dados, colunasDef, nomeArquivo, nomePlanilha = "Relatorio") => { try { const workbook = new ExcelJS.Workbook(); const worksheet = workbook.addWorksheet(nomePlanilha); worksheet.columns = colunasDef; dados.forEach(d => worksheet.addRow(d)); worksheet.getRow(1).eachCell((cell) => { cell.font = { bold: true, color: { argb: 'FFFFFFFF' } }; cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0F172A' } }; cell.alignment = { vertical: 'middle', horizontal: 'center' }; }); const buffer = await workbook.xlsx.writeBuffer(); saveAs(new Blob([buffer]), `${nomeArquivo}_${Date.now()}.xlsx`); toast.success(`Planilha Excel baixada!`); } catch (e) { toast.error("Erro ao gerar o Excel."); } };
+  
   const exportarExcelEstoqueCompleto = () => { const colunas = [{ header: 'Codigo SKU', key: 'sku', width: 15 }, { header: 'Produto (Descricao)', key: 'nome', width: 40 }, { header: 'Categoria', key: 'cat', width: 20 }, { header: 'NCM Fisco', key: 'ncm', width: 15 }, { header: 'Cod. Barras (EAN)', key: 'ean', width: 20 }, { header: 'Saldo Fisico', key: 'qtd', width: 15 }, { header: 'Preco Custo (R$)', key: 'custo', width: 18 }, { header: 'Preco Venda (R$)', key: 'venda', width: 18 }]; const dados = estoque.map(i => ({ sku: i.sku, nome: i.nome, cat: i.categoria || '-', ncm: i.ncm || '-', ean: i.codigo_barra || '-', qtd: i.quantidade, custo: Number(i.custo_base || 0).toFixed(2), venda: Number(i.valor_venda || 0).toFixed(2) })); criarEBaixarExcelEstilizado(dados, colunas, "Atlas_Estoque_Geral", "Produtos"); };
   const exportarExcelMargemLucro = () => { const colunas = [{ header: 'SKU', key: 'sku', width: 15 }, { header: 'Produto', key: 'nome', width: 40 }, { header: 'Custo Base (R$)', key: 'custo', width: 18 }, { header: 'Venda Final (R$)', key: 'venda', width: 18 }, { header: 'ICMS SP (18%)', key: 'icms', width: 18 }, { header: 'IPI Recolhido', key: 'ipi', width: 18 }, { header: 'Lucro Liquido (R$)', key: 'lucro', width: 20 }, { header: 'Margem (%)', key: 'margem', width: 15 }]; const dados = estoque.filter(i => i.quantidade > 0).map(i => { const venda = Number(i.valor_venda || 0); const custo = Number(i.custo_base || 0); const ipi = Number(i.ipi || 0); const icms = venda * 0.18; const valorIpi = venda * (ipi / 100); const lucroLiquido = venda - custo - icms - valorIpi; const margemPercentual = venda > 0 ? (lucroLiquido / venda) * 100 : 0; return { sku: i.sku, nome: i.nome, custo: custo.toFixed(2), venda: venda.toFixed(2), icms: icms.toFixed(2), ipi: valorIpi.toFixed(2), lucro: lucroLiquido.toFixed(2), margem: margemPercentual.toFixed(2) + '%' }; }); criarEBaixarExcelEstilizado(dados, colunas, "Atlas_Analise_Margem", "Margens Fiscais"); };
-  const exportarExcelEncalhados = () => { if (!dataInicioEncalhado || !dataFimEncalhado) return toast.warn("Selecione a Data Inicial e Final primeiro."); const start = new Date(dataInicioEncalhado).getTime(); const end = new Date(dataFimEncalhado).getTime() + 86400000; const vendasPeriodo = historicoVendas.filter(v => { const tempoVenda = new Date(v.created_at).getTime(); return tempoVenda >= start && tempoVenda <= end; }); const idsVendidos = vendasPeriodo.map(v => v.produto_id); const encalhados = estoque.filter(i => !idsVendidos.includes(i.id) && i.quantidade > 0); if (encalhados.length === 0) return toast.info("Nenhum produto encalhado!"); const colunas = [{ header: 'SKU', key: 'sku', width: 15 }, { header: 'Produto', key: 'nome', width: 40 }, { header: 'Saldo Parado', key: 'qtd', width: 18 }, { header: 'Capital Imobilizado (R$)', key: 'capital', width: 25 }]; const dados = encalhados.map(i => ({ sku: i.sku, nome: i.nome, qtd: i.quantidade, capital: (i.quantidade * Number(i.custo_base || 0)).toFixed(2) })); criarEBaixarExcelEstilizado(dados, colunas, "Atlas_Produtos_Encalhados", "Estoque Morto"); };
+  
+  const exportarExcelSemGiro = () => {
+    if (!dataInicioEncalhado || !dataFimEncalhado) return toast.warn("Selecione a Data Inicial e Final primeiro.");
+    const start = new Date(dataInicioEncalhado).getTime();
+    const end = new Date(dataFimEncalhado).getTime() + 86400000;
+
+    const vendasPeriodo = historicoVendas.filter(v => {
+      const tempoVenda = new Date(v.created_at).getTime();
+      return tempoVenda >= start && tempoVenda <= end;
+    });
+
+    const idsVendidos = vendasPeriodo.map(v => v.produto_id);
+    const semGiro = estoque.filter(i => !idsVendidos.includes(i.id) && i.quantidade > 0);
+
+    if (semGiro.length === 0) return toast.info("Ótimo! Nenhum produto sem giro neste período.");
+
+    const colunas = [
+      { header: 'SKU', key: 'sku', width: 15 },
+      { header: 'Produto', key: 'nome', width: 40 },
+      { header: 'Saldo Parado', key: 'qtd', width: 18 },
+      { header: 'Capital Imobilizado (R$)', key: 'capital', width: 25 }
+    ];
+
+    const dados = semGiro.map(i => ({
+      sku: i.sku, nome: i.nome, qtd: i.quantidade, capital: (i.quantidade * Number(i.custo_base || 0)).toFixed(2)
+    }));
+
+    criarEBaixarExcelEstilizado(dados, colunas, "Atlas_Estoque_Sem_Giro", "Produtos Inativos");
+  };
 
   const gerarRelatorioPDF = (titulo, colunas, linhas) => { const img = new Image(); img.src = logoAtlas; img.onload = () => { const doc = new jsPDF(); doc.setFontSize(22); doc.setFont("helvetica", "bold"); doc.setTextColor(0, 0, 0); doc.text("ATLAS", 14, 20); const espacoAtlas = doc.getTextWidth("ATLAS "); doc.setTextColor(156, 163, 175); doc.text("ERP", 14 + espacoAtlas, 20); doc.setFontSize(9); doc.setTextColor(100, 116, 139); doc.setFont("helvetica", "normal"); doc.text(`CNPJ: 00.000.000/0001-00 | Inscricao Estadual: 123.456.789.000`, 14, 26); doc.text(`Endereco: Avenida da Inovacao, 1000 - Sao Paulo, SP`, 14, 31); doc.text(`Contato: (11) 4000-0000 | atendimento@atlas-erp.com.br`, 14, 36); doc.setDrawColor(226, 232, 240); doc.line(14, 42, 196, 42); doc.setFontSize(14); doc.setTextColor(0, 0, 0); doc.setFont("helvetica", "bold"); doc.text(`RELATORIO GERENCIAL: ${titulo.replace(/_/g, ' ').toUpperCase()}`, 14, 52); doc.setFontSize(10); doc.setTextColor(71, 85, 105); doc.setFont("helvetica", "normal"); doc.text(`Data de Emissao: ${new Date().toLocaleString('pt-BR')}`, 14, 58); doc.text(`Emitido por: ${usuarioAtual || 'Sistema'}`, 14, 63); autoTable(doc, { startY: 70, head: [colunas], body: linhas, theme: 'grid', headStyles: { fillColor: [0, 0, 0] }, didDrawPage: function (data) { doc.setGState(new doc.GState({ opacity: 0.08 })); doc.addImage(img, 'PNG', 35, 90, 140, 120); doc.setGState(new doc.GState({ opacity: 1 })); } }); const alturaPagina = doc.internal.pageSize.getHeight(); doc.setFontSize(11); doc.setTextColor(0, 0, 0); doc.setFont("helvetica", "italic"); doc.text(`Documento gerado automaticamente pelo Atlas ERP.`, doc.internal.pageSize.getWidth() / 2, alturaPagina - 15, { align: "center" }); doc.save(`ATLAS_${titulo}_${Date.now()}.pdf`); toast.success(`Relatorio baixado!`); }; };
   const acionarRelatorioEstoque = () => { gerarRelatorioPDF('Posicao_de_Estoque', ['SKU', 'Produto', 'Cat', 'Qtd', 'Custo R$', 'Venda R$'], estoque.map(i => [i.sku, i.nome, i.categoria || '-', `${i.quantidade}`, Number(i.custo_base).toFixed(2), Number(i.valor_venda).toFixed(2)])); };
   const acionarRelatorioVendas = () => { gerarRelatorioPDF('Historico_de_Vendas', ['Data', 'Cliente', 'Produto', 'Qtd', 'Faturamento'], historicoVendas.map(v => [new Date(v.created_at).toLocaleDateString(), v.cliente.split('|')[0], v.produto_nome, v.quantidade, `R$ ${Number(v.valor_total).toFixed(2)}`])); };
   const acionarRelatorioEntradas = () => { gerarRelatorioPDF('Notas_de_Entrada', ['Data', 'Fornecedor', 'CNPJ', 'Valor'], notasFiscais.map(n => [new Date(n.created_at).toLocaleDateString(), n.fornecedor, n.cnpj || '-', `R$ ${Number(n.valor_total).toFixed(2)}`])); };
   const acionarRelatorioDevolucoes = () => { gerarRelatorioPDF('Historico_de_Devolucoes', ['Data', 'Cliente', 'Produto', 'Qtd', 'Estornado'], listaDevolucoes.map(d => [new Date(d.created_at).toLocaleDateString(), d.cliente, d.produto_nome, d.quantidade, `R$ ${Number(d.valor_estornado).toFixed(2)}`])); };
+
+  // ==========================================
+  // GESTÃO DE PROMOÇÕES
+  // ==========================================
+  const ativarPromocao = async () => {
+    const idItem = document.getElementById('sel-promo-item').value;
+    const valorPromo = Number(document.getElementById('valor-promo').value);
+
+    if (!idItem || valorPromo <= 0) return toast.warn("Selecione um item e digite um valor válido.");
+    
+    const item = estoque.find(i => i.id === idItem);
+    if (valorPromo >= item.valor_venda) return toast.error("O valor promocional deve ser MENOR que o valor de venda atual!");
+
+    const { error } = await supabase.from('estoque').update({ valor_promocional: valorPromo }).eq('id', idItem);
+    
+    if (!error) {
+      toast.success(`Promoção ativada para: ${item.nome}`);
+      buscarEstoqueReal();
+      document.getElementById('valor-promo').value = '';
+      document.getElementById('sel-promo-item').value = '';
+    } else {
+      toast.error("Erro ao salvar promoção.");
+    }
+  };
+
+  const encerrarPromocao = async (idItem) => {
+    const { error } = await supabase.from('estoque').update({ valor_promocional: 0 }).eq('id', idItem);
+    if (!error) {
+      toast.info("Promoção encerrada. O produto voltou ao preço normal.");
+      buscarEstoqueReal();
+    }
+  };
 
   const cadastrarNovoUsuario = async (e) => {
     e.preventDefault();
@@ -427,7 +672,7 @@ export default function App() {
       case 'inicio':
         return (<div className="tela-centralizada"><img src={logoAtlas} alt="Atlas ERP" className="logo-inicio" /><div className="texto-sessao">Sessao Ativa: {usuarioAtual} ({usuarioRole})</div></div>);
       case 'dashboard':
-        return (usuarioRole === 'gerente' || usuarioRole === 'admin') ? <Dashboard estoque={estoque} historicoVendas={historicoVendas} /> : <TelaBloqueada />;
+        return (usuarioRole === 'gerente' || usuarioRole === 'admin') ? <Dashboard estoque={estoque} historicoVendas={historicoVendas} historicoDespesas={historicoDespesas} /> : <TelaBloqueada />;
       case 'receitas-e-despesas':
         return (usuarioRole === 'gerente' || usuarioRole === 'admin') ? <ExtratoFinanceiro historicoVendas={historicoVendas} historicoDespesas={historicoDespesas} /> : <TelaBloqueada />;
       case 'detalhes-de-vendas':
@@ -437,14 +682,91 @@ export default function App() {
       case 'emissao-de-nf':
         return <EmissaoRecibo historicoVendas={historicoVendas} emitirNfeSaida={emitirNfeSaida} />;
       case 'cadastro-de-item':
-        return <CadastroItem estoque={estoque} salvarCadastroItem={salvarCadastroItem} />;
+        return <CadastroItem
+          estoque={estoque}
+          salvarCadastroItem={salvarCadastroItem}
+          itensPendentes={itensPendentesEntrada}
+          carregarItemPendente={prepararAceite}
+          excluirItemPendente={cancelarPendencia}
+        />;
+
+      case 'promocoes':
+        if (usuarioRole === 'caixa') return <TelaBloqueada />;
+        const itensEmPromocao = estoque.filter(i => i.valor_promocional > 0);
+        return (
+          <div className="atlas-container">
+            <header className="atlas-header">
+              <div>
+                <h1>Gestão de Promoções</h1>
+                <p>Crie ofertas temporárias para acelerar o giro do estoque</p>
+              </div>
+            </header>
+
+            <div className="atlas-grid grid-start">
+              {/* CARD DE NOVA PROMOÇÃO */}
+              <div className="atlas-card">
+                <div className="card-titulo">Ativar Nova Oferta</div>
+                <div className="coluna-flex">
+                  <div className="atlas-campo">
+                    <label>Selecione o Produto (Digite para buscar)</label>
+                    <input type="text" id="sel-promo-item" list="lista-estoque-promo" className="input-tabela" placeholder="SKU ou Nome..." />
+                    <datalist id="lista-estoque-promo">
+                      {estoque.filter(i => i.quantidade > 0 && (!i.valor_promocional || i.valor_promocional === 0)).map(i => (
+                        <option key={i.id} value={i.id}>{i.sku} - {i.nome} (R$ {Number(i.valor_venda).toFixed(2)})</option>
+                      ))}
+                    </datalist>
+                  </div>
+                  <div className="atlas-campo mt-10">
+                    <label>Novo Preço Promocional (R$)</label>
+                    <input type="number" id="valor-promo" className="input-tabela input-destaque-centro" placeholder="0.00" step="0.01" />
+                  </div>
+                  <button className="botao-primario w-100 mt-20 btn-gigante" onClick={ativarPromocao} style={{ backgroundColor: '#e11d48' }}>
+                    🔥 Disparar Promoção
+                  </button>
+                </div>
+              </div>
+
+              {/* TABELA DE OFERTAS ATIVAS */}
+              <div className="atlas-card">
+                <div className="card-titulo" style={{ color: '#e11d48' }}>Promoções Rodando Agora</div>
+                <table className="atlas-tabela">
+                  <thead>
+                    <tr>
+                      <th>Produto</th>
+                      <th>De (Original)</th>
+                      <th>Por (Promoção)</th>
+                      <th>Ação</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {itensEmPromocao.map(item => (
+                      <tr key={item.id}>
+                        <td><strong>{item.nome}</strong></td>
+                        <td style={{ textDecoration: 'line-through', color: '#94a3b8' }}>R$ {Number(item.valor_venda).toFixed(2)}</td>
+                        <td style={{ fontWeight: 'bold', color: '#e11d48', fontSize: '15px' }}>R$ {Number(item.valor_promocional).toFixed(2)}</td>
+                        <td>
+                          <button className="botao-secundario font-12" onClick={() => encerrarPromocao(item.id)}>
+                            Encerrar
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                    {itensEmPromocao.length === 0 && (
+                      <tr><td colSpan="4" className="texto-cinza-vazio">Nenhuma promoção ativa no momento.</td></tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        );
+
       case 'vendas':
         return <FrenteCaixa estoque={estoque} registrarVenda={registrarVenda} maskCNPJ={maskCNPJ} maskCPF={maskCPF} maskTelefone={maskTelefone} caixaAtivo={caixaAtivo} />;
       case 'devolucoes':
-        return (usuarioRole === 'gerente' || usuarioRole === 'admin') ? <Devolucoes estoque={estoque} registrarDevolucao={registrarDevolucao} gerarReciboDevolucaoPDF={gerarReciboDevolucaoPDF} maskCNPJ={maskCNPJ} maskCPF={maskCPF} maskTelefone={maskTelefone} /> : <TelaBloqueada />;
+        return (usuarioRole === 'gerente' || usuarioRole === 'admin') ? <Devolucoes estoque={estoque} registrarDevolucao={registrarDevolucao} gerarReciboDevolucaoPDF={gerarReciboDevolucaoPDF} maskCNPJ={maskCNPJ} maskCPF={maskCPF} maskTelefone={maskTelefone} historicoVendas={historicoVendas} listaDevolucoes={listaDevolucoes} /> : <TelaBloqueada />;
       case 'controle-de-caixa':
         return <ControleCaixa caixaAtivo={caixaAtivo} abrirCaixa={abrirCaixa} fecharCaixa={fecharCaixa} historicoVendas={historicoVendas} usuarioAtual={usuarioAtual} />;
-
       case 'historico-de-caixa':
         if (usuarioRole === 'caixa') return <TelaBloqueada />;
         return (
@@ -593,12 +915,13 @@ export default function App() {
                 <button className="botao-secundario w-100 mt-20" onClick={exportarExcelMargemLucro}>Baixar Excel</button>
               </div>
               <div className="atlas-card card-centro">
-                <h3>Produtos Encalhados</h3><p className="texto-cinza font-12 mt-10">Descubra qual estoque parou e nao vendeu no periodo.</p>
+                <h3>Estoque Sem Giro</h3>
+                <p className="texto-cinza font-12 mt-10">Descubra o capital imobilizado que não teve vendas no período.</p>
                 <div style={{ display: 'flex', gap: '5px', marginTop: '15px' }}>
-                  <input type="date" className="input-tabela" value={dataInicioEncalhado} onChange={e => setDataInicioEncalhado(e.target.value)} title="Data Inicial" />
-                  <input type="date" className="input-tabela" value={dataFimEncalhado} onChange={e => setDataFimEncalhado(e.target.value)} title="Data Final" />
+                  <input type="date" className="input-tabela" value={dataInicioEncalhado || ''} onChange={e => setDataInicioEncalhado(e.target.value)} title="Data Inicial" />
+                  <input type="date" className="input-tabela" value={dataFimEncalhado || ''} onChange={e => setDataFimEncalhado(e.target.value)} title="Data Final" />
                 </div>
-                <button className="botao-secundario w-100 mt-10" onClick={exportarExcelEncalhados}>Baixar Excel</button>
+                <button className="botao-secundario w-100 mt-10" onClick={exportarExcelSemGiro}>Baixar Excel</button>
               </div>
             </div>
           </div>
@@ -638,22 +961,6 @@ export default function App() {
           </div>
         );
 
-      case 'ajustes':
-        if (usuarioRole === 'caixa') return <TelaBloqueada />;
-        return (
-          <div className="atlas-container">
-            <header className="atlas-header"><h1>Manutencao de Saldos</h1></header>
-            <div className="atlas-card">
-              <div className="atlas-linha">
-                <div className="atlas-campo flex-2"><select id="sel-ajuste"><option value="">Selecione...</option>{estoque.map(i => <option key={i.id} value={i.id}>{i.nome}</option>)}</select></div>
-                <div className="atlas-campo"><select id="tipo-ajuste"><option value="entrada">Credito (+)</option><option value="saida">Debito (-)</option></select></div>
-                <div className="atlas-campo"><input type="number" id="qtd-ajuste" placeholder="Qtd" /></div>
-              </div>
-              <button className="botao-primario w-100 mt-20" onClick={realizarAjusteEstoque}>Ajustar</button>
-            </div>
-          </div>
-        );
-
       case 'nova-requisicao':
         return (
           <div className="atlas-container">
@@ -683,35 +990,69 @@ export default function App() {
         );
 
       case 'entradas':
-        return <Entradas setTelaAtiva={setTelaAtiva} confirmarEntradaComPendencia={confirmarEntradaComPendencia} maskCNPJ={maskCNPJ} manipularUpload={manipularUpload} imagemAnexada={imagemAnexada} setImagemAnexada={setImagemAnexada} linhasItens={linhasItens} atualizarValorLinha={atualizarValorLinha} removerLinha={removerLinha} adicionarLinha={adicionarLinha} />;
+        return <Entradas setTelaAtiva={setTelaAtiva} confirmarEntradaComPendencia={confirmarEntradaComPendencia} maskCNPJ={maskCNPJ} maskTelefone={maskTelefone} manipularUpload={manipularUpload} imagemAnexada={imagemAnexada} setImagemAnexada={setImagemAnexada} linhasItens={linhasItens} atualizarValorLinha={atualizarValorLinha} removerLinha={removerLinha} adicionarLinha={adicionarLinha} listaFornecedores={listaFornecedores} />;
 
       case 'saidas':
+        if (usuarioRole === 'caixa') return <TelaBloqueada />;
         return (
           <div className="atlas-container">
-            <header className="atlas-header"><div><h1>Expedicao Avulsa</h1></div></header>
+            <header className="atlas-header">
+              <div>
+                <h1>Saídas e Baixas Manuais</h1>
+                <p>Registre retiradas de mercadoria que não passaram pelo PDV (Avarias, Consumo, etc.)</p>
+              </div>
+            </header>
+
             <div className="atlas-card full">
+              <div className="card-titulo">Itens para Baixa</div>
               <table className="atlas-tabela">
                 <thead>
                   <tr>
-                    <th>Produto Registrado</th>
-                    <th>Quantidade</th>
-                    <th>Motivo</th>
-                    <th>Acao</th>
+                    <th>Produto no Estoque</th>
+                    <th style={{ width: '120px' }}>Qtd Baixa</th>
+                    <th style={{ width: '250px' }}>Motivo Oficial da Saída</th>
+                    <th style={{ textAlign: 'center', width: '80px' }}>Ação</th>
                   </tr>
                 </thead>
                 <tbody>
                   {linhasItens.map(linha => (
                     <tr key={linha.id}>
-                      <td><select className="input-tabela" onChange={(e) => atualizarValorLinha(linha.id, 'nome_temp', e.target.value)}><option value="">Selecione...</option>{estoque.filter(i => i.quantidade > 0).map(i => (<option key={i.id} value={i.id}>{i.nome}</option>))}</select></td>
-                      <td><input type="number" className="input-tabela" min="1" onChange={(e) => atualizarValorLinha(linha.id, 'qtd', e.target.value)} /></td>
-                      <td><input type="text" className="input-tabela" onChange={(e) => atualizarValorLinha(linha.id, 'vlrA', e.target.value)} /></td>
-                      <td><button onClick={() => removerLinha(linha.id)} className="botao-link">Excluir</button></td>
+                      <td>
+                        <select className="input-tabela" value={linha.nome_temp || ''} onChange={(e) => atualizarValorLinha(linha.id, 'nome_temp', e.target.value)}>
+                          <option value="">Selecione o produto...</option>
+                          {estoque.filter(i => i.quantidade > 0).map(i => (
+                            <option key={i.id} value={i.id}>{i.nome} (Saldo: {i.quantidade})</option>
+                          ))}
+                        </select>
+                      </td>
+                      <td>
+                        <input type="number" className="input-tabela" min="1" value={linha.qtd || ''} onChange={(e) => atualizarValorLinha(linha.id, 'qtd', e.target.value)} placeholder="0" />
+                      </td>
+                      <td>
+                        <select className="input-tabela" value={linha.vlrA || ''} onChange={(e) => atualizarValorLinha(linha.id, 'vlrA', e.target.value)}>
+                          <option value="">Selecione um motivo...</option>
+                          <option value="Uso Interno">Uso Interno (Consumo da Loja)</option>
+                          <option value="Avaria / Quebra">Avaria / Quebra</option>
+                          <option value="Vencimento / Validade">Vencimento / Validade</option>
+                          <option value="Perda / Furto">Perda / Furto</option>
+                          <option value="Doação / Brinde">Doação / Brinde</option>
+                          <option value="Ajuste de Contagem">Ajuste de Contagem (Balanço)</option>
+                        </select>
+                      </td>
+                      <td style={{ textAlign: 'center' }}>
+                        <button onClick={() => removerLinha(linha.id)} className="botao-link" style={{ color: '#e11d48', fontWeight: 'bold' }}>X</button>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
-              <button className="botao-adicionar" onClick={adicionarLinha}>Nova Linha</button>
-              <button className="botao-primario w-100 mt-20" onClick={registrarSaidasAvulsas}>Registrar Baixa</button>
+
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '20px' }}>
+                <button className="botao-secundario" onClick={adicionarLinha}>+ Adicionar Nova Linha</button>
+                <button className="botao-primario btn-gigante" onClick={registrarSaidasAvulsas} style={{ width: '300px' }}>
+                  Registrar Baixa Oficial
+                </button>
+              </div>
             </div>
           </div>
         );
@@ -830,6 +1171,58 @@ export default function App() {
                 <thead><tr><th>Doc</th><th>Fornecedor</th><th>Produto</th><th>Total</th></tr></thead>
                 <tbody>{pedidosOficiais.map(ped => (<tr key={ped.id}><td>{ped.protocolo}</td><td>{ped.fornecedor}</td><td>{ped.produto}</td><td>R$ {ped.subtotal.toFixed(2)}</td></tr>))}</tbody>
               </table>
+            </div>
+          </div>
+        );
+
+      case 'ajustes':
+        if (usuarioRole === 'caixa') return <TelaBloqueada />;
+        return (
+          <div className="atlas-container">
+            <header className="atlas-header">
+              <div>
+                <h1>Ajuste Rápido de Saldo</h1>
+                <p>Corrija furos de estoque localizando o produto rapidamente pelo SKU ou Nome</p>
+              </div>
+            </header>
+
+            <div className="atlas-card centralizado-800">
+              <div className="card-titulo">Manutenção de Inventário</div>
+
+              <div className="atlas-linha">
+                <div className="atlas-campo flex-2">
+                  <label>Localizar Produto (Nome ou SKU)</label>
+                  <input
+                    type="text"
+                    id="sel-ajuste"
+                    list="lista-produtos-ajuste"
+                    className="input-tabela input-destaque-centro"
+                    placeholder="Digite para buscar..."
+                  />
+                  <datalist id="lista-produtos-ajuste">
+                    {estoque.map(i => <option key={i.id} value={i.id}>{i.sku} - {i.nome} (Saldo: {i.quantidade})</option>)}
+                  </datalist>
+                  <span className="font-11 texto-cinza mt-5">Selecione o produto na lista usando a seta ou digitando.</span>
+                </div>
+              </div>
+
+              <div className="atlas-linha mt-15">
+                <div className="atlas-campo">
+                  <label>Tipo de Movimento</label>
+                  <select id="tipo-ajuste" className="input-tabela">
+                    <option value="entrada">Crédito (+) Adicionar ao saldo</option>
+                    <option value="saida">Débito (-) Remover do saldo</option>
+                  </select>
+                </div>
+                <div className="atlas-campo">
+                  <label>Quantidade do Ajuste</label>
+                  <input type="number" id="qtd-ajuste" className="input-tabela input-destaque-centro" placeholder="0" min="1" />
+                </div>
+              </div>
+
+              <button className="botao-primario w-100 mt-30 btn-gigante" onClick={realizarAjusteEstoque}>
+                Confirmar Ajuste
+              </button>
             </div>
           </div>
         );
