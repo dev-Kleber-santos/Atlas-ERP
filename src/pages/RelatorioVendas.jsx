@@ -1,17 +1,27 @@
 import React, { useState } from 'react';
 
+// =========================================================================
+// ESTRUTURA BLINDADA DO BANCO DE DADOS ATLAS ERP:
+// Entrada: ID, Produto, Quantidade, Valor Unitário, Valor Total, Data, Fornecedor, Lote, Validade
+// Saída: ID, Produto, Quantidade, Valor Unitário, Valor Total, Data, Cliente, Vendedor
+// Fornecedores: ID, Nome, CNPJ, Telefone, Email, Endereço
+// Cotações: ID, Produto, Fornecedor, Valor Cotado, Data, Status
+// =========================================================================
+
 export default function RelatorioVendas({ historicoVendas, vendaExpandidaId, setVendaExpandidaId }) {
   const [termoBuscaVenda, setTermoBuscaVenda] = useState('');
 
-  const montanteVendido = historicoVendas.reduce((acc, v) => acc + Number(v.valor_total), 0);
+  const montanteVendido = (historicoVendas || []).reduce((acc, v) => acc + Number(v.valor_total || 0), 0);
 
-  // Filtro Inteligente: Busca por Número (VD) ou Nome/CPF do cliente
-  const vendasFiltradas = historicoVendas.filter(v => {
+  // Filtro Inteligente: Busca por Número (VD), Nome do Cliente, CPF ou PRODUTO
+  const vendasFiltradas = (historicoVendas || []).filter(v => {
     if (!termoBuscaVenda) return true;
-    const termo = termoBuscaVenda.toLowerCase();
+    const termo = String(termoBuscaVenda || '').toLowerCase();
     const numeroStr = String(v.numero_venda || '').toLowerCase();
     const clienteStr = String(v.cliente || '').toLowerCase();
-    return numeroStr.includes(termo) || clienteStr.includes(termo);
+    const produtoStr = String(v.produto_nome || '').toLowerCase(); // Agora ele enxerga o produto!
+    
+    return numeroStr.includes(termo) || clienteStr.includes(termo) || produtoStr.includes(termo);
   });
 
   return (
@@ -22,12 +32,11 @@ export default function RelatorioVendas({ historicoVendas, vendaExpandidaId, set
           <p>Consulte cupons emitidos e dados de clientes</p>
         </div>
         
-        {/* Barra de Pesquisa Estilo Google */}
         <div style={{ position: 'relative', width: '350px' }}>
           <input 
             type="text" 
             className="input-tabela" 
-            placeholder="Buscar por Nº do Cupom, Nome ou CPF..." 
+            placeholder="Buscar por Nº do Cupom, Item ou CPF..." 
             value={termoBuscaVenda}
             onChange={(e) => setTermoBuscaVenda(e.target.value)}
             style={{ paddingLeft: '35px', borderRadius: '20px', border: '2px solid #cbd5e1' }}
@@ -43,7 +52,7 @@ export default function RelatorioVendas({ historicoVendas, vendaExpandidaId, set
         </div>
         <div className="atlas-card metrica-card-cinza">
           <h3 className="metrica-titulo-cinza">Operações (Cupons)</h3>
-          <h2 className="metrica-valor-cinza">{historicoVendas.length}</h2>
+          <h2 className="metrica-valor-cinza">{(historicoVendas || []).length}</h2>
         </div>
       </div>
 
@@ -64,7 +73,6 @@ export default function RelatorioVendas({ historicoVendas, vendaExpandidaId, set
             ) : (
               vendasFiltradas.map(v => (
                 <tr key={v.id}>
-                  {/* Destacando o Número da Venda para a Devolução */}
                   <td style={{ fontWeight: 'bold', color: '#475569', fontSize: '15px' }}>
                     VD-{String(v.numero_venda || 0).padStart(4, '0')}
                   </td>

@@ -1022,18 +1022,68 @@ body {
   background-color: #ffe4e6;
 }
 
-/* Controle dinamico do espaco da pagina */
-.conteudo-pagina {
-  padding-top: 20px;
-  padding-right: 20px;
-  padding-bottom: 20px;
-  transition: padding-left 0.3s ease;
+/* ========================================================= */
+/* MODO ESCURO (TRUE BLACK - ZERO AZUL) */
+/* ========================================================= */
+body.tema-escuro {
+  background-color: #000000 !important;
+  color: #f5f5f5 !important;
 }
 
-.conteudo-pagina.com-sidebar {
-  padding-left: 240px;
+body.tema-escuro .container-principal,
+body.tema-escuro .atlas-container,
+body.tema-escuro .conteudo-pagina {
+  background-color: #000000 !important;
+  color: #e5e5e5 !important;
 }
 
-.conteudo-pagina.sem-sidebar {
-  padding-left: 20px;
+body.tema-escuro .atlas-card,
+body.tema-escuro .mega-menu-topo,
+body.tema-escuro .menu-lateral-esquerdo,
+body.tema-escuro .tela-centralizada {
+  background-color: #121212 !important; /* Cinza chumbo/preto para os cards */
+  border: 1px solid #222222 !important;
+  box-shadow: none !important;
+}
+
+body.tema-escuro .atlas-header h1,
+body.tema-escuro .card-titulo,
+body.tema-escuro label,
+body.tema-escuro .metrica-titulo-azul,
+body.tema-escuro .metrica-titulo-cinza,
+body.tema-escuro .titulo-menu-lateral {
+  color: #ffffff !important;
+}
+
+body.tema-escuro p, 
+body.tema-escuro .texto-cinza,
+body.tema-escuro span {
+  color: #a3a3a3 !important;
+}
+
+/* Tabelas All Black */
+body.tema-escuro .atlas-tabela th {
+  background-color: #0a0a0a !important;
+  color: #ffffff !important;
+  border-bottom: 2px solid #222222 !important;
+}
+
+body.tema-escuro .atlas-tabela td {
+  border-bottom: 1px solid #222222 !important;
+  color: #d4d4d4 !important;
+}
+
+/* Inputs e Selects Escuros e Neutros */
+body.tema-escuro input,
+body.tema-escuro select,
+body.tema-escuro textarea {
+  background-color: #000000 !important;
+  color: #ffffff !important;
+  border: 1px solid #333333 !important;
+}
+
+body.tema-escuro input:focus,
+body.tema-escuro select:focus {
+  border-color: #555555 !important;
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.1) !important;
 }

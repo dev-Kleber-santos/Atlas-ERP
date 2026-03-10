@@ -1,239 +1,238 @@
-import React from 'react';
-import {
-  Chart as ChartJS,
-  CategoryScale,
-  LinearScale,
-  PointElement,
-  LineElement,
-  BarElement,
-  ArcElement,
-  Title,
-  Tooltip,
-  Legend,
-  Filler
-} from 'chart.js';
-import { Line, Doughnut } from 'react-chartjs-2';
+import React, { useState } from 'react';
+import { 
+  TrendingUp, 
+  Package, 
+  AlertTriangle, 
+  ShoppingCart,
+  DollarSign
+} from 'lucide-react';
+import { 
+  PieChart, 
+  Pie, 
+  Cell, 
+  BarChart, 
+  Bar, 
+  XAxis, 
+  YAxis, 
+  Tooltip, 
+  ResponsiveContainer 
+} from 'recharts';
 
-ChartJS.register(
-  CategoryScale, LinearScale, PointElement, LineElement,
-  BarElement, ArcElement, Title, Tooltip, Legend, Filler
-);
+// =========================================================================
+// ESTRUTURA BLINDADA DO BANCO DE DADOS ATLAS ERP
+// =========================================================================
 
-export default function Dashboard({ estoque = [], historicoVendas = [], historicoDespesas = [] }) {
+export default function Dashboard({ estoque = [], historicoVendas = [] }) {
+  
+  const dataAtual = new Date();
+  const mesAtual = `${dataAtual.getFullYear()}-${String(dataAtual.getMonth() + 1).padStart(2, '0')}`;
+  const [mesSelecionado, setMesSelecionado] = useState(mesAtual);
 
-  // --- MATEMÁTICA FINANCEIRA REAL ---
-  const faturamentoBruto = historicoVendas.reduce((acc, v) => acc + Number(v.valor_total), 0);
-
-  const totalCMV = historicoVendas.reduce((acc, v) => {
-    const prod = estoque.find(p => p.id === v.produto_id);
-    const custoUnitario = prod ? Number(prod.custo_base || 0) : 0;
-    return acc + (custoUnitario * Number(v.quantidade));
-  }, 0);
-
-  const totalDespesas = historicoDespesas.reduce((acc, d) => acc + Number(d.valor_total || 0), 0);
-
-  const lucroReal = faturamentoBruto - totalCMV - totalDespesas;
-  const margemLucro = faturamentoBruto > 0 ? (lucroReal / faturamentoBruto) * 100 : 0;
-
-  // --- MÉTRICAS DE ESTOQUE ---
-  const capitalEstoque = estoque.reduce((acc, item) => acc + (Number(item.quantidade) * Number(item.custo_base || 0)), 0);
-  const itensAlerta = estoque.filter(i => i.quantidade <= (i.estoque_minimo || 5)).length;
-
-  // --- GRÁFICO DE EVOLUÇÃO (7 DIAS) ---
-  const ultimos7Dias = Array.from({ length: 7 }, (_, i) => {
-    const d = new Date();
-    d.setDate(d.getDate() - i);
-    return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
-  }).reverse();
-
-  const dadosFaturamentoDia = ultimos7Dias.map(dia => {
-    return historicoVendas
-      .filter(v => new Date(v.created_at).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) === dia)
-      .reduce((acc, v) => acc + Number(v.valor_total), 0);
+  const vendasDoMes = historicoVendas.filter(v => {
+    if (!v.created_at) return false;
+    return v.created_at.startsWith(mesSelecionado);
   });
 
-  const dadosLucroDia = ultimos7Dias.map(dia => {
-    const vendasDia = historicoVendas.filter(v => new Date(v.created_at).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) === dia);
-    const faturamento = vendasDia.reduce((acc, v) => acc + Number(v.valor_total), 0);
-    const custo = vendasDia.reduce((acc, v) => {
-      const p = estoque.find(prod => prod.id === v.produto_id);
-      return acc + (Number(p?.custo_base || 0) * Number(v.quantidade));
-    }, 0);
-    return faturamento - custo;
+  const faturamentoTotal = vendasDoMes.reduce((acc, v) => acc + Number(v.valor_total || 0), 0);
+  const totalItens = vendasDoMes.reduce((acc, v) => acc + Number(v.quantidade || 0), 0);
+  const ticketMedio = vendasDoMes.length > 0 ? (faturamentoTotal / vendasDoMes.length) : 0;
+
+  const estoqueBaixo = estoque.filter(p => p.quantidade > 0 && p.quantidade <= (p.estoque_minimo || 5));
+
+  const mapaVendas = {};
+  vendasDoMes.forEach(v => {
+    if (!mapaVendas[v.produto_id]) {
+      mapaVendas[v.produto_id] = { nome: v.produto_nome, totalVendido: 0, ultimaVenda: v.created_at };
+    }
+    mapaVendas[v.produto_id].totalVendido += Number(v.quantidade);
   });
 
-  const dataLinha = {
-    labels: ultimos7Dias,
-    datasets: [
-      {
-        label: 'Vendas (R$)',
-        data: dadosFaturamentoDia,
-        borderColor: '#2563eb',
-        backgroundColor: 'rgba(37, 99, 235, 0.1)',
-        tension: 0.4,
-        fill: true,
-      },
-      {
-        label: 'Lucro Bruto (R$)',
-        data: dadosLucroDia,
-        borderColor: '#10b981',
-        backgroundColor: 'rgba(16, 185, 129, 0.1)',
-        tension: 0.4,
-        fill: true,
-      }
-    ]
-  };
+  const topVendidos = Object.values(mapaVendas)
+    .sort((a, b) => b.totalVendido - a.totalVendido)
+    .slice(0, 3);
 
-  // --- TOP PRODUTOS E CATEGORIAS ---
-  const mapVendas = {};
-  historicoVendas.forEach(v => { mapVendas[v.produto_id] = (mapVendas[v.produto_id] || 0) + Number(v.quantidade); });
-
-  // Os 5 mais vendidos
-  const topProdutos = estoque
-    .filter(i => mapVendas[i.id] > 0)
-    .map(i => ({ nome: i.nome, qtd: mapVendas[i.id] }))
-    .sort((a, b) => b.qtd - a.qtd)
-    .slice(0, 5);
-
-  // Os 5 menos vendidos (mas que têm saldo no estoque)
-  const pioresProdutos = estoque
-    .filter(i => i.quantidade > 0) // Só avalia o que está ocupando espaço na loja
-    .map(i => ({ nome: i.nome, qtd: mapVendas[i.id] || 0 })) // Se não vendeu nada, é 0
-    .sort((a, b) => a.qtd - b.qtd)
-    .slice(0, 5);
-
-  const vendasPorCategoria = {};
+  const mapaVendasGlobal = {};
   historicoVendas.forEach(v => {
-    const cat = estoque.find(p => p.id === v.produto_id)?.categoria || 'Geral';
-    vendasPorCategoria[cat] = (vendasPorCategoria[cat] || 0) + Number(v.valor_total);
+    if (!mapaVendasGlobal[v.produto_id]) {
+      mapaVendasGlobal[v.produto_id] = { ultimaVenda: v.created_at };
+    }
+    if (new Date(v.created_at) > new Date(mapaVendasGlobal[v.produto_id].ultimaVenda)) {
+      mapaVendasGlobal[v.produto_id].ultimaVenda = v.created_at;
+    }
   });
 
-  // Cores extras para aguentar muitas categorias novas
-  const coresCategorias = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#64748b', '#ec4899', '#14b8a6', '#f97316', '#06b6d4'];
+  const estoqueSemGiro = estoque
+    .filter(p => p.quantidade > 0 && !mapaVendasGlobal[p.id])
+    .map(p => ({ nome: p.nome, qtd: p.quantidade, ultimaVenda: null }));
 
-  const dataRosca = {
-    labels: Object.keys(vendasPorCategoria),
-    datasets: [{
-      data: Object.values(vendasPorCategoria),
-      backgroundColor: coresCategorias,
-      borderWidth: 0
-    }]
+  const mapaCategorias = {};
+  estoque.forEach(p => {
+    const cat = p.categoria || 'Sem Categoria';
+    if (!mapaCategorias[cat]) mapaCategorias[cat] = 0;
+    mapaCategorias[cat] += Number(p.quantidade);
+  });
+  const dadosPizza = Object.keys(mapaCategorias).map(cat => ({ name: cat, value: mapaCategorias[cat] }));
+  const coresPizza = ['#0f172a', '#3b82f6', '#f97316', '#10b981', '#8b5cf6', '#ec4899'];
+
+  const [anoStr, mesStr] = mesSelecionado.split('-');
+  const diasNoMes = new Date(anoStr, Number(mesStr), 0).getDate();
+
+  const dadosGraficoMes = Array.from({ length: diasNoMes }, (_, i) => ({
+    dia: String(i + 1).padStart(2, '0'),
+    vendas: 0
+  }));
+
+  vendasDoMes.forEach(v => {
+    const dataVenda = new Date(v.created_at);
+    dataVenda.setMinutes(dataVenda.getMinutes() + dataVenda.getTimezoneOffset());
+    const diaVenda = dataVenda.getDate();
+    const index = diaVenda - 1;
+    if (dadosGraficoMes[index]) {
+      dadosGraficoMes[index].vendas += Number(v.valor_total || 0);
+    }
+  });
+
+  const formatarData = (dataIso) => {
+    if (!dataIso) return "Nunca vendido";
+    return new Date(dataIso).toLocaleDateString('pt-BR');
   };
 
   return (
-    <div className="atlas-container">
-      <header className="atlas-header">
-        <div>
-          <h1>Dashboard Atlas ERP</h1>
-          <p>Sua empresa em números reais, descontando perdas e custos.</p>
-        </div>
-      </header>
-
-      {/* CARDS FINANCEIROS */}
-      <div className="atlas-grid" style={{ gridTemplateColumns: 'repeat(4, 1fr)', marginBottom: '20px' }}>
-        <div className="atlas-card card-centro" style={{ borderTop: '4px solid #3b82f6' }}>
-          <h3 className="texto-cinza font-12">Faturamento Bruto</h3>
-          <div className="font-22 bold">R$ {faturamentoBruto.toFixed(2)}</div>
-          <span className="font-11 texto-verde">Dinheiro em caixa</span>
+    // Removido o marginLeft: 250px que quebrava tudo, agora o sistema gerencia sozinho!
+    <div className="dashboard-container" style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '20px', width: '100%' }}>
+      
+      {/* LINHA 1: Cards Principais (Com Flex Wrap para Responsividade) */}
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '20px' }}>
+        <div className="atlas-card" style={{ flex: '1 1 200px', borderLeft: '4px solid #0f172a' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', color: '#64748b', marginBottom: '10px' }}>
+            <span style={{ fontWeight: '600', fontSize: '14px' }}>Faturamento (Mês)</span>
+            <DollarSign size={20} color="#0f172a" />
+          </div>
+          <p style={{ fontSize: '24px', fontWeight: '800', color: '#0f172a', margin: 0 }}>R$ {faturamentoTotal.toFixed(2)}</p>
         </div>
 
-        <div className="atlas-card card-centro" style={{ borderTop: '4px solid #10b981', background: '#f0fdf4' }}>
-          <h3 className="texto-cinza font-12" style={{ color: '#15803d' }}>Lucro Líquido Real</h3>
-          <div className="font-22 bold" style={{ color: '#15803d' }}>R$ {lucroReal.toFixed(2)}</div>
-          <span className="font-11 bold" style={{ color: '#16a34a' }}>{margemLucro.toFixed(1)}% de margem</span>
+        <div className="atlas-card" style={{ flex: '1 1 200px', borderLeft: '4px solid #3b82f6' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', color: '#64748b', marginBottom: '10px' }}>
+            <span style={{ fontWeight: '600', fontSize: '14px' }}>Itens Vendidos</span>
+            <ShoppingCart size={20} color="#3b82f6" />
+          </div>
+          <p style={{ fontSize: '24px', fontWeight: '800', color: '#0f172a', margin: 0 }}>{totalItens}</p>
         </div>
 
-        <div className="atlas-card card-centro" style={{ borderTop: '4px solid #ef4444', background: '#fef2f2' }}>
-          <h3 className="texto-cinza font-12" style={{ color: '#b91c1c' }}>Despesas e Perdas</h3>
-          <div className="font-22 bold" style={{ color: '#b91c1c' }}>R$ {totalDespesas.toFixed(2)}</div>
-          <span className="font-11 texto-cinza">Avarias, Estornos e Fixos</span>
+        <div className="atlas-card" style={{ flex: '1 1 200px', borderLeft: '4px solid #f97316' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', color: '#64748b', marginBottom: '10px' }}>
+            <span style={{ fontWeight: '600', fontSize: '14px' }}>Ticket Médio</span>
+            <TrendingUp size={20} color="#f97316" />
+          </div>
+          <p style={{ fontSize: '24px', fontWeight: '800', color: '#0f172a', margin: 0 }}>R$ {ticketMedio.toFixed(2)}</p>
         </div>
 
-        <div className="atlas-card card-centro" style={{ borderTop: '4px solid #f59e0b' }}>
-          <h3 className="texto-cinza font-12">Capital em Estoque</h3>
-          <div className="font-22 bold">R$ {capitalEstoque.toFixed(2)}</div>
-          <span className="font-11" style={{ color: '#d97706' }}>{itensAlerta} itens p/ repor</span>
+        <div className="atlas-card" style={{ flex: '1 1 200px', borderLeft: '4px solid #dc2626' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', color: '#64748b', marginBottom: '10px' }}>
+            <span style={{ fontWeight: '600', fontSize: '14px' }}>Estoque Crítico</span>
+            <AlertTriangle size={20} color="#dc2626" />
+          </div>
+          <p style={{ fontSize: '24px', fontWeight: '800', color: '#0f172a', margin: 0 }}>{estoqueBaixo.length} Produtos</p>
         </div>
       </div>
 
-      <div className="atlas-grid" style={{ gridTemplateColumns: '2fr 1fr', gap: '20px', marginBottom: '20px' }}>
-        {/* GRÁFICO DE LINHA */}
-        <div className="atlas-card">
-          <div className="card-titulo">Desempenho da Semana (Venda vs Lucro)</div>
-          <div style={{ height: '300px' }}>
-            <Line
-              data={dataLinha}
-              options={{
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: { legend: { position: 'top' } }
-              }}
+      {/* LINHA 2: Gráficos (Ajustáveis) */}
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '20px' }}>
+        
+        <div className="atlas-card" style={{ flex: '1 1 500px', height: '350px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '10px' }}>
+            <h3 style={{ fontSize: '16px', color: '#0f172a', margin: 0 }}>Faturamento Diário</h3>
+            <input 
+              type="month" 
+              value={mesSelecionado}
+              onChange={(e) => setMesSelecionado(e.target.value)}
+              className="input-tabela"
+              style={{ width: '150px' }}
             />
           </div>
+          <ResponsiveContainer width="100%" height={260}>
+            <BarChart data={dadosGraficoMes} margin={{ top: 5, right: 10, left: 15, bottom: 0 }}>
+              <XAxis dataKey="dia" stroke="#94a3b8" fontSize={12} tickLine={false} axisLine={false} />
+              <YAxis width={75} stroke="#94a3b8" fontSize={12} tickLine={false} axisLine={false} tickFormatter={(value) => `R$ ${value}`} />
+              <Tooltip 
+                cursor={{ fill: '#f1f5f9' }} 
+                contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' }}
+                formatter={(value) => [`R$ ${Number(value).toFixed(2)}`, 'Vendas']}
+                labelFormatter={(label) => `Dia ${label}`}
+              />
+              <Bar dataKey="vendas" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
         </div>
 
-        {/* RECEITA POR CATEGORIA */}
-        <div className="atlas-card">
-          <div className="card-titulo">Vendas por Categoria</div>
-          <div style={{ height: '300px', display: 'flex', alignItems: 'center' }}>
-            {Object.keys(vendasPorCategoria).length > 0 ? (
-              <Doughnut data={dataRosca} options={{ responsive: true, maintainAspectRatio: false }} />
-            ) : (
-              <p className="texto-cinza-vazio">Sem vendas registradas.</p>
-            )}
-          </div>
+        <div className="atlas-card" style={{ flex: '1 1 300px', height: '350px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+          <h3 style={{ fontSize: '16px', color: '#0f172a', marginBottom: '10px', alignSelf: 'flex-start' }}>Estoque por Categoria</h3>
+          <ResponsiveContainer width="100%" height={280}>
+            <PieChart>
+              <Pie data={dadosPizza} innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="value">
+                {dadosPizza.map((entry, index) => (
+                  <Cell key={`cell-${index}`} fill={coresPizza[index % coresPizza.length]} />
+                ))}
+              </Pie>
+              <Tooltip contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' }} />
+            </PieChart>
+          </ResponsiveContainer>
         </div>
       </div>
 
-      <div className="atlas-grid" style={{ gridTemplateColumns: 'repeat(3, 1fr)', gap: '20px' }}>
-        {/* RANKING MAIS VENDIDOS */}
-        <div className="atlas-card">
-          <div className="card-titulo" style={{ color: '#16a34a' }}>Top 5 Mais Vendidos</div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '10px' }}>
-            {topProdutos.map((p, idx) => (
-              <div key={`top-${idx}`} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px', background: '#f0fdf4', borderRadius: '8px', border: '1px solid #bbf7d0' }}>
-                <span className="bold font-14">#{idx + 1} {p.nome.length > 18 ? p.nome.substring(0, 18) + '...' : p.nome}</span>
-                <span className="badge-azul" style={{ background: '#16a34a', color: 'white', padding: '4px 8px', borderRadius: '4px', fontSize: '12px' }}>{p.qtd} saídas</span>
+      {/* LINHA 3: Tabelas de Ação (Agora se adaptam à tela) */}
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '20px' }}>
+        
+        <div className="atlas-card" style={{ flex: '1 1 300px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '15px' }}>
+            <TrendingUp size={18} color="#10b981" />
+            <h3 style={{ fontSize: '15px', color: '#0f172a', margin: 0 }}>Top 3 Mais Vendidos (Mês)</h3>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            {topVendidos.length === 0 ? <p style={{ fontSize: '13px', color: '#94a3b8' }}>Nenhuma venda registrada no período.</p> : topVendidos.map((item, index) => (
+              <div key={index} style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #f1f5f9', paddingBottom: '8px' }}>
+                <span style={{ color: '#334155', fontSize: '14px' }}>{item.nome}</span>
+                <span style={{ fontWeight: 'bold', color: '#0f172a', fontSize: '14px' }}>{item.totalVendido} un</span>
               </div>
             ))}
-            {topProdutos.length === 0 && <p className="texto-cinza-vazio">Nenhum dado disponível.</p>}
           </div>
         </div>
 
-        {/* RANKING MENOS VENDIDOS */}
-        <div className="atlas-card">
-          <div className="card-titulo" style={{ color: '#e11d48' }}>Alerta: Baixo Giro (Inativos)</div>
-          <p className="font-11 texto-cinza mb-10">Itens com saldo em prateleira, mas com zero ou poucas saídas.</p>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-            {pioresProdutos.map((p, idx) => (
-              <div key={`worst-${idx}`} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px', background: '#fff1f2', borderRadius: '8px', border: '1px solid #fecdd3' }}>
-                <span className="bold font-14" style={{ color: '#9f1239' }}>#{idx + 1} {p.nome.length > 18 ? p.nome.substring(0, 18) + '...' : p.nome}</span>
-                <span style={{ background: '#e11d48', color: 'white', padding: '4px 8px', borderRadius: '4px', fontSize: '12px', fontWeight: 'bold' }}>{p.qtd} saídas</span>
+        <div className="atlas-card" style={{ flex: '1 1 300px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '15px' }}>
+            <AlertTriangle size={18} color="#f97316" />
+            <h3 style={{ fontSize: '15px', color: '#0f172a', margin: 0 }}>Reposição Urgente</h3>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            {estoqueBaixo.length === 0 ? <p style={{ fontSize: '13px', color: '#94a3b8' }}>Estoque sob controle.</p> : estoqueBaixo.map((item, index) => (
+              <div key={index} style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #f1f5f9', paddingBottom: '8px' }}>
+                <span style={{ color: '#334155', fontSize: '14px' }}>{item.nome}</span>
+                <span style={{ fontWeight: 'bold', color: '#f97316', fontSize: '14px' }}>{item.quantidade} un</span>
               </div>
             ))}
-            {pioresProdutos.length === 0 && <p className="texto-cinza-vazio">Estoque girando 100%!</p>}
           </div>
         </div>
 
-        {/* ALERTAS CRÍTICOS */}
-        <div className="atlas-card">
-          <div className="card-titulo" style={{ color: '#d97706' }}>Alertas e Insights</div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '10px' }}>
-            {itensAlerta > 0 && (
-              <div style={{ padding: '10px', background: '#fffbeb', borderLeft: '4px solid #f59e0b', borderRadius: '4px', fontSize: '13px' }}>
-                <strong style={{ color: '#b45309' }}>🚨 Reposição:</strong> Você tem {itensAlerta} produtos precisando de compra urgente.
+        <div className="atlas-card" style={{ flex: '1 1 300px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '15px' }}>
+            <Package size={18} color="#64748b" />
+            <h3 style={{ fontSize: '15px', color: '#0f172a', margin: 0 }}>Estoque Sem Giro Geral</h3>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '15px', maxHeight: '150px', overflowY: 'auto' }}>
+            {estoqueSemGiro.length === 0 ? <p style={{ fontSize: '13px', color: '#94a3b8' }}>Todos os produtos têm giro.</p> : estoqueSemGiro.map((item, index) => (
+              <div key={index} style={{ display: 'flex', flexDirection: 'column', borderBottom: '1px solid #f1f5f9', paddingBottom: '8px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ color: '#0f172a', fontWeight: '600', fontSize: '14px' }}>{item.nome}</span>
+                  <span style={{ fontWeight: 'bold', color: '#64748b', fontSize: '14px' }}>{item.qtd} un</span>
+                </div>
+                <span style={{ color: '#dc2626', fontSize: '12px', marginTop: '4px', fontWeight: '500' }}>
+                  Última venda: {formatarData(item.ultimaVenda)}
+                </span>
               </div>
-            )}
-            {totalDespesas > (faturamentoBruto * 0.2) && (
-              <div style={{ padding: '10px', background: '#fef2f2', borderLeft: '4px solid #ef4444', borderRadius: '4px', fontSize: '13px' }}>
-                <strong style={{ color: '#b91c1c' }}>⚠️ Custos Altos:</strong> Suas despesas ultrapassaram 20% do faturamento. Revise as avarias.
-              </div>
-            )}
-            <div style={{ padding: '10px', background: '#f0f9ff', borderLeft: '4px solid #0ea5e9', borderRadius: '4px', fontSize: '13px' }}>
-              <strong style={{ color: '#0369a1' }}>💡 Dica de Venda:</strong> Tente criar um "Combo" juntando o seu mais vendido ({topProdutos[0]?.nome || 'Item Top'}) com o encalhado nº 1 ({pioresProdutos[0]?.nome || 'Item Parado'}).
-            </div>
+            ))}
           </div>
         </div>
+
       </div>
     </div>
   );

@@ -31,6 +31,8 @@ export default function App() {
   const [usuarioRole, setUsuarioRole] = useState('');
   const [inputUser, setInputUser] = useState('');
   const [inputPass, setInputPass] = useState('');
+  const [temaEscuro, setTemaEscuro] = useState(false);
+  const [sidebarRecuada, setSidebarRecuada] = useState(false);
 
   const [telaAtiva, setTelaAtiva] = useState('inicio');
   const [imagemAnexada, setImagemAnexada] = useState(null);
@@ -72,6 +74,17 @@ export default function App() {
     { nome: 'Requisicoes', filhos: ['Nova Requisicao', 'Painel de Requisicoes'] },
     { nome: 'Configuracoes', filhos: ['Gerenciar Usuarios'] }
   ];
+
+  // ==========================================
+  // MOTOR DO MODO ESCURO (Força a tela inteira)
+  // ==========================================
+  useEffect(() => {
+    if (temaEscuro) {
+      document.body.classList.add('tema-escuro');
+    } else {
+      document.body.classList.remove('tema-escuro');
+    }
+  }, [temaEscuro]);
 
   const itensMenu = menuBase.filter(categoria => {
     if (usuarioRole === 'admin') return true;
@@ -581,10 +594,10 @@ export default function App() {
   const converterCotacaoEmPedido = async (cotacao) => { const valores = [{ forn: cotacao.fornBase || 'Base', vlr: cotacao.vlrA }, { forn: 'Opcao B', vlr: cotacao.vlrB }, { forn: 'Opcao C', vlr: cotacao.vlrC }].filter(v => v.vlr > 0); if (valores.length === 0) return toast.error("Registre um valor financeiro."); const vencedor = valores.reduce((prev, curr) => (curr.vlr < prev.vlr ? curr : prev)); await supabase.from('pedidos_compra').insert([{ protocolo: `PED-${Math.floor(1000 + Math.random() * 9000)}`, fornecedor: vencedor.forn, produto: cotacao.produto || cotacao.nome_temp, qtd: cotacao.qtd, unitario: vencedor.vlr, subtotal: cotacao.qtd * vencedor.vlr, data: new Date().toISOString().split('T')[0] }]); if (!cotacao.isManual) { await supabase.from('cotacoes').delete().eq('id', cotacao.id); buscarCotacoesReal(); } buscarPedidosReal(); toast.success(`Pedido de compra aprovado.`); setTelaAtiva('pedidos'); };
 
   const criarEBaixarExcelEstilizado = async (dados, colunasDef, nomeArquivo, nomePlanilha = "Relatorio") => { try { const workbook = new ExcelJS.Workbook(); const worksheet = workbook.addWorksheet(nomePlanilha); worksheet.columns = colunasDef; dados.forEach(d => worksheet.addRow(d)); worksheet.getRow(1).eachCell((cell) => { cell.font = { bold: true, color: { argb: 'FFFFFFFF' } }; cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0F172A' } }; cell.alignment = { vertical: 'middle', horizontal: 'center' }; }); const buffer = await workbook.xlsx.writeBuffer(); saveAs(new Blob([buffer]), `${nomeArquivo}_${Date.now()}.xlsx`); toast.success(`Planilha Excel baixada!`); } catch (e) { toast.error("Erro ao gerar o Excel."); } };
-  
+
   const exportarExcelEstoqueCompleto = () => { const colunas = [{ header: 'Codigo SKU', key: 'sku', width: 15 }, { header: 'Produto (Descricao)', key: 'nome', width: 40 }, { header: 'Categoria', key: 'cat', width: 20 }, { header: 'NCM Fisco', key: 'ncm', width: 15 }, { header: 'Cod. Barras (EAN)', key: 'ean', width: 20 }, { header: 'Saldo Fisico', key: 'qtd', width: 15 }, { header: 'Preco Custo (R$)', key: 'custo', width: 18 }, { header: 'Preco Venda (R$)', key: 'venda', width: 18 }]; const dados = estoque.map(i => ({ sku: i.sku, nome: i.nome, cat: i.categoria || '-', ncm: i.ncm || '-', ean: i.codigo_barra || '-', qtd: i.quantidade, custo: Number(i.custo_base || 0).toFixed(2), venda: Number(i.valor_venda || 0).toFixed(2) })); criarEBaixarExcelEstilizado(dados, colunas, "Atlas_Estoque_Geral", "Produtos"); };
   const exportarExcelMargemLucro = () => { const colunas = [{ header: 'SKU', key: 'sku', width: 15 }, { header: 'Produto', key: 'nome', width: 40 }, { header: 'Custo Base (R$)', key: 'custo', width: 18 }, { header: 'Venda Final (R$)', key: 'venda', width: 18 }, { header: 'ICMS SP (18%)', key: 'icms', width: 18 }, { header: 'IPI Recolhido', key: 'ipi', width: 18 }, { header: 'Lucro Liquido (R$)', key: 'lucro', width: 20 }, { header: 'Margem (%)', key: 'margem', width: 15 }]; const dados = estoque.filter(i => i.quantidade > 0).map(i => { const venda = Number(i.valor_venda || 0); const custo = Number(i.custo_base || 0); const ipi = Number(i.ipi || 0); const icms = venda * 0.18; const valorIpi = venda * (ipi / 100); const lucroLiquido = venda - custo - icms - valorIpi; const margemPercentual = venda > 0 ? (lucroLiquido / venda) * 100 : 0; return { sku: i.sku, nome: i.nome, custo: custo.toFixed(2), venda: venda.toFixed(2), icms: icms.toFixed(2), ipi: valorIpi.toFixed(2), lucro: lucroLiquido.toFixed(2), margem: margemPercentual.toFixed(2) + '%' }; }); criarEBaixarExcelEstilizado(dados, colunas, "Atlas_Analise_Margem", "Margens Fiscais"); };
-  
+
   const exportarExcelSemGiro = () => {
     if (!dataInicioEncalhado || !dataFimEncalhado) return toast.warn("Selecione a Data Inicial e Final primeiro.");
     const start = new Date(dataInicioEncalhado).getTime();
@@ -628,12 +641,12 @@ export default function App() {
     const valorPromo = Number(document.getElementById('valor-promo').value);
 
     if (!idItem || valorPromo <= 0) return toast.warn("Selecione um item e digite um valor válido.");
-    
+
     const item = estoque.find(i => i.id === idItem);
     if (valorPromo >= item.valor_venda) return toast.error("O valor promocional deve ser MENOR que o valor de venda atual!");
 
     const { error } = await supabase.from('estoque').update({ valor_promocional: valorPromo }).eq('id', idItem);
-    
+
     if (!error) {
       toast.success(`Promoção ativada para: ${item.nome}`);
       buscarEstoqueReal();
@@ -1239,16 +1252,33 @@ export default function App() {
   return (
     <div className="container-principal">
       <ToastContainer position="top-right" autoClose={2000} theme="colored" />
-      <MenuNavegacao itensMenu={itensMenu} setTelaAtiva={setTelaAtiva} usuarioAtual={usuarioAtual} realizarLogoff={realizarLogoff} />
+      <MenuNavegacao itensMenu={itensMenu} setTelaAtiva={setTelaAtiva} usuarioAtual={usuarioAtual} realizarLogoff={realizarLogoff} temaEscuro={temaEscuro} setTemaEscuro={setTemaEscuro} />
 
+      {/* MENU LATERAL COM BOTÃO DE MINIMIZAR */}
       {mostrarSidebar && (
-        <div className="menu-lateral-esquerdo">
-          {mostrarMenuEsquerdo && (
+        <div className="menu-lateral-esquerdo" style={{
+          width: sidebarRecuada ? '0px' : '230px',
+          padding: sidebarRecuada ? '0px' : '20px',
+          overflow: 'hidden',
+          transition: 'all 0.3s ease',
+          whiteSpace: 'nowrap'
+        }}>
+          {!sidebarRecuada && (
             <>
-              <div className="titulo-menu-lateral">
-                {categoriaAtual.nome}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
+                <div className="titulo-menu-lateral" style={{ margin: 0 }}>
+                  {categoriaAtual?.nome || 'Menu'}
+                </div>
+                <button
+                  onClick={() => setSidebarRecuada(true)}
+                  style={{ background: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer', fontSize: '18px' }}
+                  title="Recolher Painel"
+                >
+                  «
+                </button>
               </div>
-              {categoriaAtual.filhos.map(filho => {
+
+              {categoriaAtual?.filhos.map(filho => {
                 const slug = gerarSlug(filho);
                 const isAtivo = telaAtiva === slug;
                 return (
@@ -1262,32 +1292,60 @@ export default function App() {
                 );
               })}
               <div className="divisor-lateral"></div>
+
+              <div className="titulo-menu-lateral">Meus Atalhos</div>
+              {favoritos.map(fav => (
+                <button
+                  key={fav}
+                  onClick={() => setTelaAtiva(fav)}
+                  className={`btn-menu-lateral ${telaAtiva === fav ? 'ativo' : ''}`}
+                  title={`Ir para ${nomesDasTelas[fav] || fav}`}
+                >
+                  {nomesDasTelas[fav] || fav}
+                </button>
+              ))}
+
+              <button
+                onClick={gerenciarFavoritos}
+                className={`btn-atalho-acao ${favoritos.includes(telaAtiva) ? 'remover' : ''}`}
+                title={favoritos.includes(telaAtiva) ? "Remover" : "Fixar"}
+              >
+                {favoritos.includes(telaAtiva) ? 'Remover Favorito' : 'Salvar Favorito'}
+              </button>
             </>
           )}
-
-          <div className="titulo-menu-lateral">Meus Atalhos</div>
-          {favoritos.map(fav => (
-            <button
-              key={fav}
-              onClick={() => setTelaAtiva(fav)}
-              className={`btn-menu-lateral ${telaAtiva === fav ? 'ativo' : ''}`}
-              title={`Ir para ${nomesDasTelas[fav] || fav}`}
-            >
-              {nomesDasTelas[fav] || fav}
-            </button>
-          ))}
-
-          <button
-            onClick={gerenciarFavoritos}
-            className={`btn-atalho-acao ${favoritos.includes(telaAtiva) ? 'remover' : ''}`}
-            title={favoritos.includes(telaAtiva) ? "Remover tela atual dos atalhos" : "Fixar tela atual nos atalhos"}
-          >
-            {favoritos.includes(telaAtiva) ? 'Remover Favorito' : 'Salvar Favorito'}
-          </button>
         </div>
       )}
 
-      <main className={`conteudo-pagina ${mostrarSidebar ? 'com-sidebar' : 'sem-sidebar'}`}>
+      {/* BOTÃO FLUTUANTE PARA ABRIR A SIDEBAR QUANDO ELA ESTIVER FECHADA */}
+      {mostrarSidebar && sidebarRecuada && (
+        <button
+          onClick={() => setSidebarRecuada(false)}
+          style={{
+            position: 'fixed',
+            left: '0',
+            top: '50%',
+            transform: 'translateY(-50%)',
+            backgroundColor: '#2563eb',
+            color: 'white',
+            border: 'none',
+            padding: '15px 5px',
+            cursor: 'pointer',
+            borderRadius: '0 8px 8px 0',
+            zIndex: 999,
+            fontWeight: 'bold',
+            boxShadow: '2px 0 10px rgba(0,0,0,0.1)'
+          }}
+        >
+          »
+        </button>
+      )}
+
+      <main className={`conteudo-pagina`} style={{
+        marginLeft: (mostrarSidebar && !sidebarRecuada) ? '250px' : '20px',
+        transition: 'margin-left 0.3s ease',
+        width: '100%'
+      }}>
         {renderizarConteudo()}
       </main>
     </div>
